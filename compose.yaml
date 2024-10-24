@@ -1,0 +1,79 @@
+services:
+  my-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stream-settlement-app
+    ports:
+      - "8080:8080"
+    # my-db의 컨테이너가 생성되고 healthy 하다고 판단 될 때, 해당 컨테이너를 생성한다.
+    depends_on:
+      my-db:
+        condition: service_healthy
+      redis-refresh-token:
+        condition: service_healthy
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - MYSQL_HOST=my-db
+      - MYSQL_PORT=3306
+      - MYSQL_DATABASE=mydb
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=password
+      - DATABASE_URL=jdbc:mysql://my-db:3306/mydb
+      - DATABASE_PASSWORD=password
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - REDIS_HOST=redis-refresh-token
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=redispassword
+      - JPA_HIBERNATE_DDL_AUTO=update
+    networks:
+      - app-network
+
+  my-db:
+    image: mysql
+    container_name: stream-settlement-db
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: mydb # MySQL 최초 실행 시 mydb라는 데이터베이스를 생성해준다.
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    volumes:
+      - ./mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    networks:
+      - app-network
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "my-db", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}" ] # MySQL이 healthy 한 지 판단할 수 있는 명령어
+      interval: 5s # 5초 간격으로 체크
+      retries: 10 # 10번까지 재시도
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+
+  redis-refresh-token:
+    image: redis:alpine
+    container_name: stream-settlement-redis
+    command: redis-server --requirepass redispassword
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data/refresh-token-data:/data
+      - ./data/refresh-token-data/redis.conf:/usr/local/etc/redis-refresh-token/redis.conf
+    networks:
+      - app-network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      retries: 5
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge

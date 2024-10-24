@@ -1,0 +1,153 @@
+HELP.md
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/
+
+# Java 관련
+*.class
+*.jar
+*.war
+*.ear
+
+# IntelliJ 관련 파일 및 설정
+.idea/
+logs/
+temp/
+.idea_modules/
+
+# IntelliJ 사용자별 설정
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/usage.statistics.xml
+.idea/**/dictionaries
+.idea/**/shelf
+.idea/**/aws.xml
+
+# IntelliJ 자동 생성 파일
+.idea/**/contentModel.xml
+.idea/**/dataSources/
+.idea/**/dataSources.ids
+.idea/**/dataSources.local.xml
+.idea/**/sqlDataSources.xml
+.idea/**/dynamic.xml
+.idea/**/uiDesigner.xml
+.idea/**/dbnavigator.xml
+.idea/**/gradle.xml
+.idea/**/libraries
+.idea/**/mongoSettings.xml
+.idea/**/replstate.xml
+.idea/**/sonarlint/
+.idea/**/sonarIssues.xml
+.idea/**/markdown-navigator.xml
+.idea/**/markdown-navigator-enh.xml
+.idea/**/markdown-navigator/
+.idea/httpRequests
+.idea/$CACHE_FILE$
+.idea/codestream.xml
+.idea/**/azureSettings.xml
+.idea/caches/build_file_checksums.ser
+
+# Gradle 관련
+.gradle/
+!gradle-wrapper.jar
+
+# Log 파일
+*.log
+*.log.*
+
+# Redis 관련
+dump.rdb
+appendonly.aof
+*.rdb
+
+# Docker 관련
+**/Dockerfile
+**/docker-compose.yml
+**/.dockerignore
+*.env
+.env.*
+
+# MySQL 관련
+*.sql
+*.db
+/mysql_data/
+
+# Spring Boot 관련
+target/
+
+# 환경 설정 및 민감 정보
+application.yml
+application-*.yml
+application.properties
+application-*.properties
+
+# OS 및 IDE 관련 파일
+.DS_Store
+Thumbs.db
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+*.icloud
+
+# Thumbnails 및 MacOS 특수 파일
+._*
+Icon
+.AppleDouble
+.LSOverride
+
+# Crash logs
+hs_err_pid*
+replay_pid*
+
+
+# Archive 및 패키징 관련 파일
+*.nar
+*.zip
+*.tar.gz
+*.rar
+
+# Compiled 및 임시 파일
+*.ctxt
+.mtj.tmp/
