@@ -13,7 +13,7 @@ public interface StatisticsRepository extends JpaRepository<ContentStatistics, L
             StatisticsPeriod period, LocalDate date, Pageable pageable
     );
 
-    List<ContentStatistics> findTop5ByPeriodAndStatisticsDateOrderByTotalWatchTimeDesc(
+    List<ContentStatistics> findTop5ByPeriodAndStatisticsDateOrderByWatchTimeDesc(
             StatisticsPeriod period, LocalDate date, Pageable pageable
     );
 }

@@ -37,7 +37,7 @@ public class StatisticsService {
         LocalDate targetDate = getTargetDate(period);
         Pageable pageable = PageRequest.of(0, 5);
         List<ContentStatistics> statistics = statisticsRepository
-                .findTop5ByPeriodAndStatisticsDateOrderByTotalWatchTimeDesc(period, targetDate, pageable);
+                .findTop5ByPeriodAndStatisticsDateOrderByWatchTimeDesc(period, targetDate, pageable);
 
         return statistics.stream()
                 .map(ContentStatisticsResponse::from)
