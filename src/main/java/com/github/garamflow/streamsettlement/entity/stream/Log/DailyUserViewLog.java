@@ -103,6 +103,33 @@ public class DailyUserViewLog {
         }
     }
 
+    // 공통으로 사용하는 검증 로직
+    private void validatePosition(Integer position) {
+        if (position < 0) {
+            throw new IllegalArgumentException("Position cannot be negative");
+        }
+        if (position < lastViewedPosition) {
+            throw new IllegalArgumentException("Position cannot be less than the last viewed position");
+        }
+    }
+
+    private void processAdvertisements(Integer position) {
+        int currentAdViewCount = position / 300;
+        if (currentAdViewCount > lastAdViewCount) {
+            int newAdViews = currentAdViewCount - lastAdViewCount;
+            contentPost.getContentPosts().forEach(adContent ->
+                    adContent.getAdvertisement().incrementViews(newAdViews));
+            this.lastAdViewCount = currentAdViewCount;
+        }
+    }
+
+    private void updateDateIfNeeded() {
+        LocalDate today = LocalDate.now();
+        if (!this.logDate.equals(today)) {
+            this.logDate = today;
+        }
+    }
+
     public static class Builder {
         private User user;
         private ContentPost contentPost;
@@ -133,33 +160,6 @@ public class DailyUserViewLog {
             return new DailyUserViewLog(this);
         }
 
-    }
-
-    // 공통으로 사용하는 검증 로직
-    private void validatePosition(Integer position) {
-        if (position < 0) {
-            throw new IllegalArgumentException("Position cannot be negative");
-        }
-        if (position < lastViewedPosition) {
-            throw new IllegalArgumentException("Position cannot be less than the last viewed position");
-        }
-    }
-
-    private void processAdvertisements(Integer position) {
-        int currentAdViewCount = position / 300;
-        if (currentAdViewCount > lastAdViewCount) {
-            int newAdViews = currentAdViewCount - lastAdViewCount;
-            contentPost.getContentPosts().forEach(adContent ->
-                    adContent.getAdvertisement().incrementViews(newAdViews));
-            this.lastAdViewCount = currentAdViewCount;
-        }
-    }
-
-    private void updateDateIfNeeded() {
-        LocalDate today = LocalDate.now();
-        if (!this.logDate.equals(today)) {
-            this.logDate = today;
-        }
     }
 }
 
