@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
 public class Settlement {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -43,5 +43,71 @@ public class Settlement {
 
     @UpdateTimestamp
     private LocalDateTime updatedAt;
+
+    private Settlement(Builder builder) {
+        this.contentStatistics = builder.contentStatistics;
+        this.settlementDate = builder.settlementDate;
+        this.dailyViews = builder.dailyViews;
+        this.totalViews = builder.totalViews;
+        this.contentAmount = builder.contentAmount;
+        this.adAmount = builder.adAmount;
+        this.totalAmount = builder.totalAmount;
+        this.status = builder.status;
+    }
+
+    public static class Builder {
+        private ContentStatistics contentStatistics;
+        private LocalDate settlementDate;
+        private Long dailyViews;
+        private Long totalViews;
+        private Long contentAmount;
+        private Long adAmount;
+        private Long totalAmount;
+        private SettlementStatus status;
+
+        public Builder contentStatistics(ContentStatistics contentStatistics) {
+            this.contentStatistics = contentStatistics;
+            return this;
+        }
+
+        public Builder settlementDate(LocalDate settlementDate) {
+            this.settlementDate = settlementDate;
+            return this;
+        }
+
+        public Builder dailyViews(Long dailyViews) {
+            this.dailyViews = dailyViews;
+            return this;
+        }
+
+        public Builder totalViews(Long totalViews) {
+            this.totalViews = totalViews;
+            return this;
+        }
+
+        public Builder contentAmount(Long contentAmount) {
+            this.contentAmount = contentAmount;
+            return this;
+        }
+
+        public Builder adAmount(Long adAmount) {
+            this.adAmount = adAmount;
+            return this;
+        }
+
+        public Builder totalAmount(Long totalAmount) {
+            this.totalAmount = totalAmount;
+            return this;
+        }
+
+        public Builder status(SettlementStatus status) {
+            this.status = status;
+            return this;
+        }
+
+        public Settlement build() {
+            return new Settlement(this);
+        }
+    }
 
 }
