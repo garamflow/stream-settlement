@@ -1,13 +1,13 @@
 package com.github.garamflow.streamsettlement.service.stream;
 
 import com.github.garamflow.streamsettlement.controller.dto.stream.StreamingEndType;
-import com.github.garamflow.streamsettlement.entity.stream.Log.DailyUserViewLog;
+import com.github.garamflow.streamsettlement.entity.stream.Log.DailyMemberViewLog;
 import com.github.garamflow.streamsettlement.entity.stream.Log.StreamingStatus;
 import com.github.garamflow.streamsettlement.entity.stream.content.ContentPost;
-import com.github.garamflow.streamsettlement.entity.user.User;
+import com.github.garamflow.streamsettlement.entity.member.Member;
 import com.github.garamflow.streamsettlement.repository.stream.ContentPostRepository;
-import com.github.garamflow.streamsettlement.repository.stream.DailyUserViewLogRepository;
-import com.github.garamflow.streamsettlement.repository.user.UserRepository;
+import com.github.garamflow.streamsettlement.repository.stream.DailyMemberViewLogRepository;
+import com.github.garamflow.streamsettlement.repository.user.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,21 +20,21 @@ import java.util.NoSuchElementException;
 public class StreamingService {
 
     private final ContentPostRepository contentPostRepository;
-    private final DailyUserViewLogRepository dailyUserViewLogRepository;
-    private final UserRepository userRepository;
+    private final DailyMemberViewLogRepository dailyMemberViewLogRepository;
+    private final MemberRepository memberRepository;
 
-    public DailyUserViewLog startPlayback(Long contentPostId, Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new NoSuchElementException("User not found"));
+    public DailyMemberViewLog startPlayback(Long contentPostId, Long memberId) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new NoSuchElementException("Member not found"));
 
         ContentPost contentPost = contentPostRepository.findById(contentPostId)
                 .orElseThrow(() -> new NoSuchElementException("ContentPost not found"));
 
-        DailyUserViewLog viewLog = dailyUserViewLogRepository
-                .findByUserIdAndContentPostId(userId, contentPostId)
+        DailyMemberViewLog viewLog = dailyMemberViewLogRepository
+                .findByMemberIdAndContentPostId(memberId, contentPostId)
                 .map(previousLog ->
-                        DailyUserViewLog.createContinueLog(
-                                user,
+                        DailyMemberViewLog.createContinueLog(
+                                member,
                                 contentPost,
                                 previousLog.getLastViewedPosition(),
                                 previousLog.getLastAdViewCount()
@@ -42,17 +42,17 @@ public class StreamingService {
                 )
                 .orElseGet(() -> {
                     contentPost.incrementTotalViews();
-                    return DailyUserViewLog.createNewLog(user, contentPost);
+                    return DailyMemberViewLog.createNewLog(member, contentPost);
                 });
 
         // Todo 캐시로 저장할 예정
-        return dailyUserViewLogRepository.save(viewLog);
+        return dailyMemberViewLogRepository.save(viewLog);
     }
 
     // 재생 위치 업데이트
-    public StreamingStatus updatePlaybackPosition(Long userId, Long contentPostId, Integer positionInSeconds) {
-        DailyUserViewLog viewLog = dailyUserViewLogRepository
-                .findByUserIdAndContentPostId(userId, contentPostId)
+    public StreamingStatus updatePlaybackPosition(Long memberId, Long contentPostId, Integer positionInSeconds) {
+        DailyMemberViewLog viewLog = dailyMemberViewLogRepository
+                .findByMemberIdAndContentPostId(memberId, contentPostId)
                 .orElseThrow(() -> new NoSuchElementException("Log not found"));
 
         // 현재 상태 확인
@@ -74,11 +74,11 @@ public class StreamingService {
         return StreamingStatus.IN_PROGRESS;
     }
 
-    public void endPlayback(Long userId, Long contentPostId,
+    public void endPlayback(Long memberId, Long contentPostId,
                             Integer finalPosition, StreamingEndType endType) {
 
-        DailyUserViewLog viewLog = dailyUserViewLogRepository
-                .findByUserIdAndContentPostId(userId, contentPostId)
+        DailyMemberViewLog viewLog = dailyMemberViewLogRepository
+                .findByMemberIdAndContentPostId(memberId, contentPostId)
                 .orElseThrow(() -> new NoSuchElementException("Log not found"));
 
         StreamingStatus newStatus = switch (endType) {

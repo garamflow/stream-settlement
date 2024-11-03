@@ -1,7 +1,7 @@
 package com.github.garamflow.streamsettlement.entity.stream.content;
 
 import com.github.garamflow.streamsettlement.entity.stream.mapping.AdvertisementContentPost;
-import com.github.garamflow.streamsettlement.entity.user.User;
+import com.github.garamflow.streamsettlement.entity.member.Member;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -19,12 +19,12 @@ import java.util.List;
 public class ContentPost {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(nullable = false)
-    private User user;
+    @JoinColumn(name = "member_id", nullable = false)
+    private Member member;
 
     @Column(nullable = false)
     private String title;
@@ -76,7 +76,7 @@ public class ContentPost {
     }
 
     private ContentPost(Builder builder) {
-        this.user = builder.user;
+        this.member = builder.member;
         this.title = builder.title;
         this.description = builder.description;
         this.duration = builder.duration;
@@ -88,7 +88,7 @@ public class ContentPost {
     }
 
     public static class Builder {
-        private User user;
+        private Member member;
         private String title;
         private String description;
         private Integer duration;
@@ -96,8 +96,8 @@ public class ContentPost {
         private Long totalWatchTime;
         private String url;
 
-        public Builder user(User user) {
-            this.user = user;
+        public Builder member(Member member) {
+            this.member = member;
             return this;
         }
 

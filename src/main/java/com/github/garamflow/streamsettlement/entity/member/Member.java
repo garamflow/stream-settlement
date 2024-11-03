@@ -1,4 +1,4 @@
-package com.github.garamflow.streamsettlement.entity.user;
+package com.github.garamflow.streamsettlement.entity.member;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -12,11 +12,11 @@ import java.time.LocalDateTime;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class User {
+public class Member {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
-    @Column(name = "user_id")
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "member_id")
     private Long id;
 
     @Column(name = "email", nullable = false, unique = true)
@@ -43,7 +43,7 @@ public class User {
     @Column(name = "provider_id")
     private String providerId;  // oauth2 제공자의 고유 id
 
-    private User(Builder builder) {
+    private Member(Builder builder) {
         this.email = builder.email;
         this.username = builder.username;
         this.role = builder.role;
@@ -58,7 +58,7 @@ public class User {
         this.updatedAt = LocalDateTime.now();
     }
 
-    public User updateEmail(String email) {
+    public Member updateEmail(String email) {
         this.email = email;
         return this;
     }
@@ -95,9 +95,9 @@ public class User {
             return this;
         }
 
-        public User build() {
+        public Member build() {
             validateEmail();
-            return new User(this);
+            return new Member(this);
         }
 
         private void validateEmail() {

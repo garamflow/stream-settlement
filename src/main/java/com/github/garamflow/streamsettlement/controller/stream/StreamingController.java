@@ -4,7 +4,7 @@ import com.github.garamflow.streamsettlement.controller.dto.stream.request.Strea
 import com.github.garamflow.streamsettlement.controller.dto.stream.request.UpdateStreamingPositionRequest;
 import com.github.garamflow.streamsettlement.controller.dto.stream.response.StreamingPositionResponse;
 import com.github.garamflow.streamsettlement.controller.dto.stream.response.StreamingStartResponse;
-import com.github.garamflow.streamsettlement.entity.stream.Log.DailyUserViewLog;
+import com.github.garamflow.streamsettlement.entity.stream.Log.DailyMemberViewLog;
 import com.github.garamflow.streamsettlement.entity.stream.Log.StreamingStatus;
 import com.github.garamflow.streamsettlement.entity.stream.content.ContentPost;
 import com.github.garamflow.streamsettlement.service.stream.StreamingService;
@@ -23,9 +23,9 @@ public class StreamingController {
     @PostMapping("/start")
     public ResponseEntity<StreamingStartResponse> startStreaming(
             @RequestParam Long contentPostId,
-            @RequestParam Long userId
+            @RequestParam Long memberId
     ) {
-        DailyUserViewLog viewLog = streamingService.startPlayback(contentPostId, userId);
+        DailyMemberViewLog viewLog = streamingService.startPlayback(contentPostId, memberId);
         ContentPost contentPost = viewLog.getContentPost();
 
         StreamingStartResponse response = StreamingStartResponse.builder()
@@ -44,7 +44,7 @@ public class StreamingController {
             @Valid @RequestBody UpdateStreamingPositionRequest request) {
 
         StreamingStatus status = streamingService.updatePlaybackPosition(
-                request.userId(),
+                request.memberId(),
                 request.contentPostId(),
                 request.positionInSeconds()
         );
@@ -63,7 +63,7 @@ public class StreamingController {
             @Valid @RequestBody StreamingEndRequest request
     ) {
         streamingService.endPlayback(
-                request.userId(),
+                request.memberId(),
                 request.contentPostId(),
                 request.finalPosition(),
                 request.endType()

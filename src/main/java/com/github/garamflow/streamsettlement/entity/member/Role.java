@@ -1,4 +1,4 @@
-package com.github.garamflow.streamsettlement.entity.user;
+package com.github.garamflow.streamsettlement.entity.member;
 
 import lombok.Getter;
 

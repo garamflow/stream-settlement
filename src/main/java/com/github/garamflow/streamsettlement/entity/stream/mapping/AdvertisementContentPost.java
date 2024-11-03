@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 public class AdvertisementContentPost {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "advertisement_content_post_id")
     private Long id;
 

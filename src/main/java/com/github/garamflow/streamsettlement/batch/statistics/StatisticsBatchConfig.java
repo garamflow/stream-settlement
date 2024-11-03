@@ -2,7 +2,7 @@ package com.github.garamflow.streamsettlement.batch.statistics;
 
 import com.github.garamflow.streamsettlement.entity.statistics.ContentStatistics;
 import com.github.garamflow.streamsettlement.entity.statistics.StatisticsPeriod;
-import com.github.garamflow.streamsettlement.entity.stream.Log.DailyUserViewLog;
+import com.github.garamflow.streamsettlement.entity.stream.Log.DailyMemberViewLog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -67,7 +67,7 @@ public class StatisticsBatchConfig {
      */
     private Step aggregateStatisticsStep(StatisticsPeriod period, String stepName) {
         return new StepBuilder("aggregate" + stepName + "StatisticsStep", jobRepository)
-                .<DailyUserViewLog, ContentStatistics>chunk(100, platformTransactionManager)
+                .<DailyMemberViewLog, ContentStatistics>chunk(100, platformTransactionManager)
                 .reader(createLogReader(stepName + "Reader", period))
                 .processor(createProcessor(period))
                 .writer(statisticsWriter())
@@ -85,11 +85,11 @@ public class StatisticsBatchConfig {
      * @param period   집계 기간
      * @return 구성된 ItemReader 객체
      */
-    private ItemReader<DailyUserViewLog> createLogReader(String stepName, StatisticsPeriod period) {
+    private ItemReader<DailyMemberViewLog> createLogReader(String stepName, StatisticsPeriod period) {
         LocalDate endDate = LocalDate.now();
         LocalDate startDate = getStartDate(period, endDate);
 
-        return new JdbcPagingItemReaderBuilder<DailyUserViewLog>()
+        return new JdbcPagingItemReaderBuilder<DailyMemberViewLog>()
                 .name(stepName)
                 .dataSource(dataSource)
                 .pageSize(10)
@@ -101,7 +101,7 @@ public class StatisticsBatchConfig {
                         "endDate", endDate
                 ))
                 .sortKeys(Collections.singletonMap("id", Order.ASCENDING))
-                .rowMapper(new BeanPropertyRowMapper<>(DailyUserViewLog.class))
+                .rowMapper(new BeanPropertyRowMapper<>(DailyMemberViewLog.class))
                 .build();
     }
 
@@ -111,7 +111,7 @@ public class StatisticsBatchConfig {
      * @param period 통계 집계 기간
      * @return DailyUserViewLog 데이터를 ContentStatistics로 변환하는 ItemProcessor 객체
      */
-    private ItemProcessor<DailyUserViewLog, ContentStatistics> createProcessor(StatisticsPeriod period) {
+    private ItemProcessor<DailyMemberViewLog, ContentStatistics> createProcessor(StatisticsPeriod period) {
         return item -> {
             LocalDate statisticsDate = switch (period) {
                 case DAILY -> item.getLogDate();

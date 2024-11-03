@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotNull;
 
 public record UpdateStreamingPositionRequest(
         @NotNull(message = "사용자 ID는 필수입니다.")
-        Long userId,
+        Long memberId,
 
         @NotNull(message = "컨텐츠 게시글 ID는 필수입니다.")
         Long contentPostId,

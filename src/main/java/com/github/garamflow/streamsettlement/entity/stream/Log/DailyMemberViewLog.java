@@ -1,7 +1,7 @@
 package com.github.garamflow.streamsettlement.entity.stream.Log;
 
 import com.github.garamflow.streamsettlement.entity.stream.content.ContentPost;
-import com.github.garamflow.streamsettlement.entity.user.User;
+import com.github.garamflow.streamsettlement.entity.member.Member;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -15,15 +15,15 @@ import java.time.LocalDateTime;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class DailyUserViewLog {
+public class DailyMemberViewLog {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(nullable = false)
-    private User user;
+    private Member member;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(nullable = false)
@@ -49,18 +49,18 @@ public class DailyUserViewLog {
     @Enumerated(EnumType.STRING)
     private StreamingStatus status = StreamingStatus.IN_PROGRESS;
 
-    public static DailyUserViewLog createNewLog(User user, ContentPost contentPost) {
+    public static DailyMemberViewLog createNewLog(Member member, ContentPost contentPost) {
         return new Builder()
-                .user(user)
+                .member(member)
                 .contentPost(contentPost)
                 .lastViewedPosition(0)
                 .lastAdViewCount(0)
                 .build();
     }
 
-    public static DailyUserViewLog createContinueLog(User user, ContentPost contentPost, Integer lastViewedPosition, Integer lastAdViewCount) {
+    public static DailyMemberViewLog createContinueLog(Member member, ContentPost contentPost, Integer lastViewedPosition, Integer lastAdViewCount) {
         return new Builder()
-                .user(user)
+                .member(member)
                 .contentPost(contentPost)
                 .lastViewedPosition(lastViewedPosition)
                 .lastAdViewCount(lastAdViewCount)
@@ -83,9 +83,9 @@ public class DailyUserViewLog {
         this.updatedAt = LocalDateTime.now();
     }
 
-    public DailyUserViewLog(Builder builder) {
+    public DailyMemberViewLog(Builder builder) {
         validateRequiredFields(builder);
-        this.user = builder.user;
+        this.member = builder.member;
         this.contentPost = builder.contentPost;
         this.lastViewedPosition = builder.lastViewedPosition != null ? builder.lastViewedPosition : 0;
         this.lastAdViewCount = builder.lastAdViewCount != null ? builder.lastAdViewCount : 0;
@@ -95,8 +95,8 @@ public class DailyUserViewLog {
     }
 
     private void validateRequiredFields(Builder builder) {
-        if (builder.user == null) {
-            throw new IllegalArgumentException("User is required");
+        if (builder.member == null) {
+            throw new IllegalArgumentException("Member is required");
         }
         if (builder.contentPost == null) {
             throw new IllegalArgumentException("ContentPost is required");
@@ -131,13 +131,13 @@ public class DailyUserViewLog {
     }
 
     public static class Builder {
-        private User user;
+        private Member member;
         private ContentPost contentPost;
         private Integer lastViewedPosition;
         private Integer lastAdViewCount;
 
-        public Builder user(User user) {
-            this.user = user;
+        public Builder member(Member member) {
+            this.member = member;
             return this;
         }
 
@@ -156,8 +156,8 @@ public class DailyUserViewLog {
             return this;
         }
 
-        public DailyUserViewLog build() {
-            return new DailyUserViewLog(this);
+        public DailyMemberViewLog build() {
+            return new DailyMemberViewLog(this);
         }
 
     }
