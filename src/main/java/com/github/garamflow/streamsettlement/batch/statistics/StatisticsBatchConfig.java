@@ -158,7 +158,7 @@ public class StatisticsBatchConfig {
     private LocalDate getStartDate(StatisticsPeriod period, LocalDate endDate) {
         return switch (period) {
             case DAILY -> endDate;
-            case WEEKLY -> endDate.minusDays(6); // 일주일간 데이터
+            case WEEKLY -> endDate.with(previousOrSame(DayOfWeek.MONDAY)); // 현재 날짜가 포함된 주의 월요일로 설정
             case MONTHLY -> endDate.withDayOfMonth(1); // 이번 달 1일부터
             case YEARLY -> endDate.withDayOfYear(1); // 올해 1월 1일부터
         };
