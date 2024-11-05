@@ -16,25 +16,30 @@ import java.util.List;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Table(name = "content_post")
 public class ContentPost {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "content_post_id")
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "member_id", nullable = false)
     private Member member;
 
-    @Column(nullable = false)
+    @Column(name = "title", nullable = false)
     private String title;
 
+    @Column(name = "description")
     private String description;
 
     // 영상 길이
+    @Column(name = "duration")
     private Integer duration;
 
     // 영상 게시글 누적 조회수
+    @Column(name = "total_views")
     private Long totalViews;
 
     // 영상 게시글 누적 시청 시간
@@ -49,7 +54,7 @@ public class ContentPost {
     private LocalDateTime updatedAt;
 
     // 영상 게시글 주소
-    @Column(nullable = false)
+    @Column(name = "url",nullable = false)
     private String url;
 
     @OneToMany(mappedBy = "contentPost")
@@ -57,9 +62,13 @@ public class ContentPost {
 
     // 현재는 사용하지 않는 것들
     @Enumerated(EnumType.STRING)
-    private ContentStatus status; // ACTIVE, INACTIVE, DELETED
+    @Column(name = "status")
+    private ContentStatus status; // ACTIVE, INACTIVE, DELETED\
+    @Column(name = "thumbnail_url")
     private String thumbnailUrl;
+    @Column(name = "tags")
     private String tags;
+    @Column(name = "category")
     private String category;
 
     @PreUpdate

@@ -15,24 +15,28 @@ import java.time.LocalDateTime;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Table(name = "daily_member_view_log")
 public class DailyMemberViewLog {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "daily_member_view_log_id")
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(nullable = false)
+    @JoinColumn(name = "member_id", nullable = false)
     private Member member;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(nullable = false)
+    @JoinColumn(name = "content_post_id", nullable = false)
     private ContentPost contentPost;
 
     // 마지막 시청 시점
+    @Column(name = "last_viewed_position")
     private Integer lastViewedPosition;
 
     // 광고 시청 횟수 (5분당 1회)
+    @Column(name = "last_ad_view_count")
     private Integer lastAdViewCount;
 
     @CreationTimestamp
@@ -43,10 +47,11 @@ public class DailyMemberViewLog {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    @Column(nullable = false)
+    @Column(name = "log_date", nullable = false)
     private LocalDate logDate;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "streaming_status", nullable = false)
     private StreamingStatus status = StreamingStatus.IN_PROGRESS;
 
     public static DailyMemberViewLog createNewLog(Member member, ContentPost contentPost) {

@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Table(name = "advertisement_content_post")
 public class AdvertisementContentPost {
 
     @Id

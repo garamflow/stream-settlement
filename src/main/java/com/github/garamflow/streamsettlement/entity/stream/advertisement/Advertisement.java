@@ -15,19 +15,24 @@ import java.util.List;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Table(name = "advertisement")
 public class Advertisement {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "advertisement_id")
     private Long id;
 
-    @Column(nullable = false)
+    @Column(name = "title", nullable = false)
     private String title;
 
+    @Column(name = "description")
     private String description;
 
+    @Column(name = "price_per_view")
     private Long pricePerView;
 
+    @Column(name = "total_views")
     private Long totalViews = 0L;
 
     @CreationTimestamp

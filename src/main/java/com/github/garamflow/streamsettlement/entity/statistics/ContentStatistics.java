@@ -11,21 +11,28 @@ import java.time.LocalDate;
 @Getter
 @Entity
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Table(name = "content_statistics")
 public class ContentStatistics {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "content_statistics_id")
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "content_post_id")
     private ContentPost contentPost;
 
+    @Column(name = "statistics_date")
     private LocalDate statisticsDate;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "period")
     private StatisticsPeriod period; // DAILY, WEEKLY, MONTHLY, YEARLY
 
+    @Column(name = "view_count")
     private Long viewCount;
+    @Column(name = "watch_time")
     private Long watchTime;
 
     public ContentStatistics(Builder builder) {
