@@ -4,9 +4,12 @@ import com.github.garamflow.streamsettlement.entity.statistics.ContentStatistics
 import com.github.garamflow.streamsettlement.entity.statistics.StatisticsPeriod;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 public interface StatisticsRepository extends JpaRepository<ContentStatistics, Long> {
     List<ContentStatistics> findTop5ByPeriodAndStatisticsDateOrderByViewCountDesc(
@@ -15,5 +18,18 @@ public interface StatisticsRepository extends JpaRepository<ContentStatistics, L
 
     List<ContentStatistics> findTop5ByPeriodAndStatisticsDateOrderByWatchTimeDesc(
             StatisticsPeriod period, LocalDate date, Pageable pageable
+    );
+
+    @Query("""
+                SELECT COALESCE(MAX(cs.accumulatedViews), 0)
+                FROM ContentStatistics cs
+                WHERE cs.contentPost.id = :contentId
+                AND cs.statisticsDate < :date
+                AND cs.period = :period
+            """)
+    Optional<Long> findLastAccumulatedViews(
+            @Param("contentId") Long contentId,
+            @Param("date") LocalDate date,
+            @Param("period") StatisticsPeriod period
     );
 }

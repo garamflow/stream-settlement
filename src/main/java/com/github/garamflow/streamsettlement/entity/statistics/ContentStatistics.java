@@ -34,6 +34,8 @@ public class ContentStatistics {
     private Long viewCount;
     @Column(name = "watch_time")
     private Long watchTime;
+    @Column(name = "accumulated_views")
+    private Long accumulatedViews;
 
     public ContentStatistics(Builder builder) {
         this.contentPost = builder.contentPost;
@@ -41,6 +43,7 @@ public class ContentStatistics {
         this.period = builder.period;
         this.viewCount = builder.viewCount;
         this.watchTime = builder.watchTime;
+        this.accumulatedViews = builder.accumulatedViews;
     }
 
     public static class Builder {
@@ -49,6 +52,7 @@ public class ContentStatistics {
         private StatisticsPeriod period;
         private Long viewCount;
         private Long watchTime;
+        private Long accumulatedViews;
 
         public Builder contentPost(ContentPost contentPost) {
             this.contentPost = contentPost;
@@ -72,6 +76,11 @@ public class ContentStatistics {
 
         public Builder watchTime(Long watchTime) {
             this.watchTime = watchTime;
+            return this;
+        }
+
+        public Builder accumulatedViews(Long accumulatedViews) {
+            this.accumulatedViews = accumulatedViews;
             return this;
         }
 
