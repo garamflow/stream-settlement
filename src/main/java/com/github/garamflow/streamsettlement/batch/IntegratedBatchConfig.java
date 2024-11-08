@@ -1,16 +1,12 @@
 package com.github.garamflow.streamsettlement.batch;
 
+import com.github.garamflow.streamsettlement.batch.config.StatisticsPartitionConfig;
 import com.github.garamflow.streamsettlement.batch.listener.SettlementStepListener;
-import com.github.garamflow.streamsettlement.batch.listener.StatisticsStepListener;
-import com.github.garamflow.streamsettlement.batch.processor.CompositeStatisticsProcessor;
 import com.github.garamflow.streamsettlement.batch.processor.SettlementProcessor;
-import com.github.garamflow.streamsettlement.batch.reader.DailyLogReader;
 import com.github.garamflow.streamsettlement.batch.reader.StatisticsReader;
 import com.github.garamflow.streamsettlement.batch.writer.SettlementWriter;
-import com.github.garamflow.streamsettlement.batch.writer.StatisticsWriter;
 import com.github.garamflow.streamsettlement.entity.settlement.Settlement;
 import com.github.garamflow.streamsettlement.entity.statistics.ContentStatistics;
-import com.github.garamflow.streamsettlement.entity.stream.Log.DailyMemberViewLog;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.*;
@@ -24,14 +20,13 @@ import org.springframework.lang.NonNull;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 /**
  * 동영상 통계 및 정산을 처리하는 통합 배치 설정 클래스
  *
  * <p>이 클래스는 다음 두 가지 주요 처리를 순차적으로 실행합니다:</p>
  * <ol>
- *     <li>시청 로그 기반의 통계 데이터 집계</li>
+ *     <li>시청 로그 기반의 통계 데이터 집계 (파티셔닝 처리)</li>
  *     <li>집계된 통계를 기반으로 한 정산 처리</li>
  * </ol>
  *
@@ -42,12 +37,18 @@ import java.util.List;
  * 2. jobExecutionListener.beforeJob() 호출
  *    - 배치 작업 시작 시간 기록
  *    ↓
- * 3. aggregateAllStatisticsStep() 실행
- *    3.1 statisticsStepListener.beforeStep()
- *    3.2 dailyLogReader.read() - 청크 단위로 반복
- *    3.3 compositeStatisticsProcessor.process()
- *    3.4 statisticsWriter.write()
- *    3.5 statisticsStepListener.afterStep()
+ * 3. aggregateAllStatisticsStep() 실행 (Master Step)
+ *    3.1 각 Worker Step 병렬 실행 (날짜별 파티셔닝)
+ *        - 2024-04-08 데이터 처리
+ *        - 2024-04-09 데이터 처리
+ *        - 2024-04-10 데이터 처리
+ *        - 2024-04-11 데이터 처리
+ *        각 Worker Step 은 다음 과정을 수행:
+ *        - dailyLogReader.read() - 청크 단위로 반복
+ *        - compositeStatisticsProcessor.process()
+ *        - statisticsWriter.write()
+ *    3.2 모든 Worker Step 완료 대기
+ *    3.3 statisticsStepListener.afterStep()
  *    ↓
  * 4. settlementStep() 실행
  *    4.1 settlementStepListener.beforeStep()
@@ -61,9 +62,16 @@ import java.util.List;
  *    - 처리 결과 집계 및 로깅
  * </pre>
  *
+ * <p><b>파티셔닝 처리:</b></p>
+ * <ul>
+ *     <li>통계 집계 Step 이 날짜별로 파티셔닝되어 병렬 처리됨</li>
+ *     <li>기본 4개의 스레드로 병렬 처리 (설정으로 변경 가능)</li>
+ *     <li>각 Worker Step 이 독립적으로 자신의 날짜 데이터만 처리</li>
+ * </ul>
+ *
  * <p><b>데이터 처리 흐름:</b></p>
  * <pre>
- * 시청 로그(DailyMemberViewLog)
+ * 시청 로그(DailyMemberViewLog) - 파티셔닝하여 병렬 처리
  * → 통계 데이터(ContentStatistics)
  * → 정산 데이터(Settlement)
  * </pre>
@@ -77,9 +85,15 @@ import java.util.List;
  *
  * <p><b>청크 처리:</b></p>
  * <ul>
- *     <li>각 Step 은 100건 단위로 청크 처리</li>
+ *     <li>각 Step 은 설정된 크기(기본 100건)로 청크 처리</li>
  *     <li>청크 단위로 트랜잭션 관리</li>
  *     <li>실패 시 청크 단위 롤백</li>
+ * </ul>
+ *
+ * <p><b>설정:</b></p>
+ * <ul>
+ *     <li>spring.batch.partition.pool-size: 병렬 처리 스레드 수</li>
+ *     <li>spring.batch.chunk-size: 청크 단위 크기</li>
  * </ul>
  */
 @Slf4j
@@ -93,10 +107,7 @@ public class IntegratedBatchConfig {
     private final JobRepository jobRepository;
     private final PlatformTransactionManager transactionManager;
 
-    private final DailyLogReader dailyLogReader;
-    private final CompositeStatisticsProcessor compositeStatisticsProcessor;
-    private final StatisticsWriter statisticsWriter;
-    private final StatisticsStepListener statisticsStepListener;
+    private final StatisticsPartitionConfig statisticsPartitionConfig;
 
     private final StatisticsReader statisticsReader;
     private final SettlementProcessor settlementProcessor;
@@ -125,29 +136,10 @@ public class IntegratedBatchConfig {
                 .build();
     }
 
-    /**
-     * 시청 로그를 집계하여 통계 데이터를 생성하는 Step 을 구성합니다.
-     *
-     * <p><b>처리 과정:</b></p>
-     * <ol>
-     *     <li>Reader: 전일 시청 로그 데이터 조회 (DailyLogReader)</li>
-     *     <li>Processor: 일/주/월/연 단위 통계 데이터 생성 (CompositeStatisticsProcessor)</li>
-     *     <li>Writer: 생성된 통계 데이터 저장 (StatisticsWriter)</li>
-     * </ol>
-     *
-     * <p>100건 단위로 청크 처리를 수행합니다.</p>
-     *
-     * @return 구성된 통계 집계 Step
-     */
     private Step aggregateAllStatisticsStep() {
-        return new StepBuilder("aggregateAllStatistics", jobRepository)
-                .<DailyMemberViewLog, List<ContentStatistics>>chunk(100, transactionManager)
-                .reader(dailyLogReader)
-                .processor(compositeStatisticsProcessor)  // 모든 기간 통계 처리
-                .writer(statisticsWriter)
-                .listener(statisticsStepListener)
-                .build();
+        return statisticsPartitionConfig.partitionStep();
     }
+
 
     /**
      * 집계된 통계 데이터를 기반으로 정산을 처리하는 Step 을 구성합니다.
