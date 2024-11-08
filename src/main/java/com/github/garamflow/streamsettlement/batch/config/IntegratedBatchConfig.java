@@ -1,6 +1,5 @@
-package com.github.garamflow.streamsettlement.batch;
+package com.github.garamflow.streamsettlement.batch.config;
 
-import com.github.garamflow.streamsettlement.batch.config.StatisticsPartitionConfig;
 import com.github.garamflow.streamsettlement.batch.listener.SettlementStepListener;
 import com.github.garamflow.streamsettlement.batch.processor.SettlementProcessor;
 import com.github.garamflow.streamsettlement.batch.reader.StatisticsReader;
@@ -12,8 +11,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.*;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
 import org.springframework.batch.core.job.builder.JobBuilder;
+import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.batch.core.repository.JobRepository;
+import org.springframework.batch.core.step.builder.JobStepBuilder;
 import org.springframework.batch.core.step.builder.StepBuilder;
+import org.springframework.batch.core.step.job.DefaultJobParametersExtractor;
+import org.springframework.batch.core.step.job.JobParametersExtractor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.lang.NonNull;
@@ -24,10 +27,20 @@ import java.time.LocalDateTime;
 /**
  * 동영상 통계 및 정산을 처리하는 통합 배치 설정 클래스
  *
- * <p>이 클래스는 다음 두 가지 주요 처리를 순차적으로 실행합니다:</p>
+ * <p>두 개의 독립적인 Job 을 JobStep 으로 실행하여 처리합니다:</p>
  * <ol>
- *     <li>시청 로그 기반의 통계 데이터 집계 (파티셔닝 처리)</li>
- *     <li>집계된 통계를 기반으로 한 정산 처리</li>
+ *     <li>통계 Job (StatisticsJob)
+ *         <ul>
+ *             <li>시청 로그 기반의 통계 데이터 집계</li>
+ *             <li>날짜별 파티셔닝으로 병렬 처리</li>
+ *         </ul>
+ *     </li>
+ *     <li>정산 Job (SettlementJob)
+ *         <ul>
+ *             <li>집계된 통계를 기반으로 정산 처리</li>
+ *             <li>각 Job 이 독립적으로 실행/재실행 가능</li>
+ *         </ul>
+ *     </li>
  * </ol>
  *
  * <p><b>전체 실행 순서:</b></p>
@@ -37,30 +50,31 @@ import java.time.LocalDateTime;
  * 2. jobExecutionListener.beforeJob() 호출
  *    - 배치 작업 시작 시간 기록
  *    ↓
- * 3. aggregateAllStatisticsStep() 실행 (Master Step)
- *    3.1 각 Worker Step 병렬 실행 (날짜별 파티셔닝)
- *        - 2024-04-08 데이터 처리
- *        - 2024-04-09 데이터 처리
- *        - 2024-04-10 데이터 처리
- *        - 2024-04-11 데이터 처리
- *        각 Worker Step 은 다음 과정을 수행:
- *        - dailyLogReader.read() - 청크 단위로 반복
- *        - compositeStatisticsProcessor.process()
- *        - statisticsWriter.write()
- *    3.2 모든 Worker Step 완료 대기
- *    3.3 statisticsStepListener.afterStep()
+ * 3. statisticsJobStep() 실행 (첫 번째 JobStep)
+ *    → statisticsJob() 실행
+ *       → partitionStep() 실행 (Master Step)
+ *          - Worker Step 병렬 실행 (날짜별 파티셔닝)
+ *            - dailyLogReader.read()
+ *            - compositeStatisticsProcessor.process()
+ *            - statisticsWriter.write()
  *    ↓
- * 4. settlementStep() 실행
- *    4.1 settlementStepListener.beforeStep()
- *        - 통계 처리 완료 여부 확인
- *    4.2 statisticsReader.read() - 청크 단위로 반복
- *    4.3 settlementProcessor.process()
- *    4.4 settlementWriter.write()
- *    4.5 settlementStepListener.afterStep()
+ * 4. settlementJobStep() 실행 (두 번째 JobStep)
+ *    → settlementJob() 실행
+ *       → settlementStep() 실행
+ *          - statisticsReader.read()
+ *          - settlementProcessor.process()
+ *          - settlementWriter.write()
  *    ↓
  * 5. jobExecutionListener.afterJob() 호출
  *    - 처리 결과 집계 및 로깅
  * </pre>
+ *
+ * <p><b>작업 단위별 독립성:</b></p>
+ * <ul>
+ *     <li>통계 Job: 파티셔닝을 통한 병렬 처리</li>
+ *     <li>정산 Job: 통계 처리 완료 후 독립 실행</li>
+ *     <li>각 Job 은 실패 시 개별 재실행 가능</li>
+ * </ul>
  *
  * <p><b>파티셔닝 처리:</b></p>
  * <ul>
@@ -89,12 +103,6 @@ import java.time.LocalDateTime;
  *     <li>청크 단위로 트랜잭션 관리</li>
  *     <li>실패 시 청크 단위 롤백</li>
  * </ul>
- *
- * <p><b>설정:</b></p>
- * <ul>
- *     <li>spring.batch.partition.pool-size: 병렬 처리 스레드 수</li>
- *     <li>spring.batch.chunk-size: 청크 단위 크기</li>
- * </ul>
  */
 @Slf4j
 @Configuration
@@ -103,8 +111,10 @@ import java.time.LocalDateTime;
 public class IntegratedBatchConfig {
 
     private static final String STATISTICS_COUNT_KEY = "statisticsCount";
+    private final BatchProperties batchProperties;
 
     private final JobRepository jobRepository;
+    private final JobLauncher jobLauncher;
     private final PlatformTransactionManager transactionManager;
 
     private final StatisticsPartitionConfig statisticsPartitionConfig;
@@ -116,30 +126,93 @@ public class IntegratedBatchConfig {
 
 
     /**
-     * 통합 배치 작업을 정의하는 Job 을 생성합니다.
+     * 통계와 정산을 순차적으로 처리하는 통합 Job 을 구성합니다.
+     * 각각의 처리가 독립적인 Job 으로 실행됩니다.
      *
      * <p><b>실행 순서:</b></p>
      * <ol>
-     *     <li>JobExecutionListener 설정 - 배치 실행 전후 처리</li>
-     *     <li>통계 집계 스텝 실행 (aggregateAllStatisticsStep)</li>
-     *     <li>정산 처리 스텝 실행 (settlementStep)</li>
+     *     <li>JobExecutionListener - 전체 작업 시작</li>
+     *     <li>StatisticsJob (JobStep 으로 실행)
+     *         <ul>
+     *             <li>날짜별 파티셔닝으로 통계 데이터 집계</li>
+     *             <li>실패 시 Statistics Job 만 재실행 가능</li>
+     *         </ul>
+     *     </li>
+     *     <li>SettlementJob (JobStep 으로 실행)
+     *         <ul>
+     *             <li>집계된 통계 기반으로 정산 처리</li>
+     *             <li>실패 시 Settlement Job 만 재실행 가능</li>
+     *         </ul>
+     *     </li>
      * </ol>
-     *
-     * @return 구성된 배치 Job
      */
     @Bean
     public Job integratedJob() {
         return new JobBuilder("integratedStatisticsAndSettlementJob", jobRepository)
                 .listener(jobExecutionListener())
-                .start(aggregateAllStatisticsStep())    // 통계 집계 스텝
-                .next(settlementStep())                 // 정산 처리 스텝
+                .start(statisticsJobStep())    // Statistics Job 을 실행하는 Step
+                .next(settlementJobStep())     // Settlement Job 을 실행하는 Step
                 .build();
     }
 
-    private Step aggregateAllStatisticsStep() {
-        return statisticsPartitionConfig.partitionStep();
+    /**
+     * 통계 집계를 담당하는 Job 을 Step 으로 실행합니다.
+     *
+     * <p><b>주요 기능:</b></p>
+     * <ul>
+     *     <li>파티셔닝된 통계 집계 Job 을 독립적으로 실행</li>
+     *     <li>Job 파라미터를 하위 Job 으로 전달</li>
+     *     <li>실패 시 이 Job 만 재실행 가능</li>
+     * </ul>
+     */
+    @Bean
+    public Step statisticsJobStep() {
+        return new JobStepBuilder(new StepBuilder("statisticsJobStep", jobRepository))
+                .job(statisticsJob())
+                .launcher(jobLauncher)
+                .parametersExtractor(jobParametersExtractor())
+                .build();
     }
 
+    /**
+     * 통계 집계를 위한 Job 을 구성합니다.
+     * 파티셔닝된 Step 을 포함합니다.
+     */
+    @Bean
+    public Job statisticsJob() {
+        return new JobBuilder("statisticsJob", jobRepository)
+                .start(statisticsPartitionConfig.partitionStep())
+                .build();
+    }
+
+    /**
+     * 정산 처리를 담당하는 Job 을 Step 으로 실행합니다.
+     *
+     * <p><b>주요 기능:</b></p>
+     * <ul>
+     *     <li>정산 처리 Job 을 독립적으로 실행</li>
+     *     <li>통계 Job 의 결과를 참조하여 처리</li>
+     *     <li>실패 시 이 Job 만 재실행 가능</li>
+     * </ul>
+     */
+    @Bean
+    public Step settlementJobStep() {
+        return new JobStepBuilder(new StepBuilder("settlementJobStep", jobRepository))
+                .job(settlementJob())
+                .launcher(jobLauncher)
+                .parametersExtractor(jobParametersExtractor())
+                .build();
+    }
+
+    /**
+     * 정산 처리를 위한 Job 을 구성합니다.
+     */
+    @Bean
+    public Job settlementJob() {
+        return new JobBuilder("settlementJob", jobRepository)
+                .start(settlementStep())
+                .build();
+    }
 
     /**
      * 집계된 통계 데이터를 기반으로 정산을 처리하는 Step 을 구성합니다.
@@ -157,7 +230,7 @@ public class IntegratedBatchConfig {
      */
     private Step settlementStep() {
         return new StepBuilder("settlement", jobRepository)
-                .<ContentStatistics, Settlement>chunk(100, transactionManager)
+                .<ContentStatistics, Settlement>chunk(batchProperties.getChunkSize(), transactionManager)
                 .reader(statisticsReader)          // 집계된 통계 읽기
                 .processor(settlementProcessor)    // 정산 금액 계산
                 .writer(settlementWriter)          // 정산 결과 저장
@@ -206,5 +279,16 @@ public class IntegratedBatchConfig {
                 }
             }
         };
+    }
+
+    /**
+     * Job 파라미터 전달을 위한 Extractor 를 구성합니다.
+     * 상위 Job 의 파라미터를 하위 Job 으로 전달합니다.
+     */
+    @Bean
+    public JobParametersExtractor jobParametersExtractor() {
+        DefaultJobParametersExtractor extractor = new DefaultJobParametersExtractor();
+        extractor.setKeys(new String[]{"date"});
+        return extractor;
     }
 }
