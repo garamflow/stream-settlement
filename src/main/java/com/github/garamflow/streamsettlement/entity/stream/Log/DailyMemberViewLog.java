@@ -60,6 +60,7 @@ public class DailyMemberViewLog {
                 .contentPost(contentPost)
                 .lastViewedPosition(0)
                 .lastAdViewCount(0)
+                .logDate(LocalDate.now())
                 .build();
     }
 
@@ -69,6 +70,7 @@ public class DailyMemberViewLog {
                 .contentPost(contentPost)
                 .lastViewedPosition(lastViewedPosition)
                 .lastAdViewCount(lastAdViewCount)
+                .logDate(LocalDate.now())
                 .build();
     }
 
@@ -94,7 +96,8 @@ public class DailyMemberViewLog {
         this.contentPost = builder.contentPost;
         this.lastViewedPosition = builder.lastViewedPosition != null ? builder.lastViewedPosition : 0;
         this.lastAdViewCount = builder.lastAdViewCount != null ? builder.lastAdViewCount : 0;
-        this.logDate = LocalDate.now();
+        this.logDate = builder.logDate != null ? builder.logDate : LocalDate.now();
+        this.status = builder.status != null ? builder.status : StreamingStatus.IN_PROGRESS;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }
@@ -140,6 +143,8 @@ public class DailyMemberViewLog {
         private ContentPost contentPost;
         private Integer lastViewedPosition;
         private Integer lastAdViewCount;
+        private LocalDate logDate;
+        private StreamingStatus status = StreamingStatus.IN_PROGRESS;
 
         public Builder member(Member member) {
             this.member = member;
@@ -161,10 +166,24 @@ public class DailyMemberViewLog {
             return this;
         }
 
+        public Builder logDate(LocalDate logDate) {
+            this.logDate = logDate;
+            return this;
+        }
+
+        public Builder status(StreamingStatus status) {
+            this.status = status;
+            return this;
+        }
+
         public DailyMemberViewLog build() {
             return new DailyMemberViewLog(this);
         }
 
+    }
+
+    public static Builder builder() {
+        return new Builder();
     }
 }
 

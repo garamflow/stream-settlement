@@ -12,6 +12,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Entity
 @Getter
@@ -43,6 +44,7 @@ public class ContentPost {
     private Long totalViews;
 
     // 영상 게시글 누적 시청 시간
+    @Column(name="total_watch_time")
     private Long totalWatchTime;
 
     @CreationTimestamp
@@ -94,6 +96,7 @@ public class ContentPost {
         this.url = builder.url;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+        this.status = builder.status;
     }
 
     public static class Builder {
@@ -104,6 +107,7 @@ public class ContentPost {
         private Long totalViews;
         private Long totalWatchTime;
         private String url;
+        private ContentStatus status;
 
         public Builder member(Member member) {
             this.member = member;
@@ -140,6 +144,11 @@ public class ContentPost {
             return this;
         }
 
+        public Builder status(ContentStatus status) {
+            this.status = status;
+            return this;
+        }
+
         public ContentPost build() {
             validateRequiredFields();
             return new ContentPost(this);
@@ -153,5 +162,24 @@ public class ContentPost {
                 throw new IllegalArgumentException("URL is required");
             }
         }
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ContentPost that = (ContentPost) o;
+        return Objects.equals(id, that.id) && 
+               Objects.equals(title, that.title) &&
+               Objects.equals(url, that.url);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, title, url);
     }
 }

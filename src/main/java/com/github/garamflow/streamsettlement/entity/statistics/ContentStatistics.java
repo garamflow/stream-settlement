@@ -11,7 +11,15 @@ import java.time.LocalDate;
 @Getter
 @Entity
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "content_statistics")
+@Table(
+        name = "content_statistics",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "unique_content_statistics", // 제약 조건 이름
+                        columnNames = {"content_post_id", "statistics_date", "period"}
+                )
+        }
+)
 public class ContentStatistics {
 
     @Id
@@ -20,14 +28,14 @@ public class ContentStatistics {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "content_post_id")
+    @JoinColumn(name = "content_post_id", nullable = false)
     private ContentPost contentPost;
 
-    @Column(name = "statistics_date")
+    @Column(name = "statistics_date", nullable = false)
     private LocalDate statisticsDate;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "period")
+    @Column(name = "period", nullable = false)
     private StatisticsPeriod period; // DAILY, WEEKLY, MONTHLY, YEARLY
 
     @Column(name = "view_count")

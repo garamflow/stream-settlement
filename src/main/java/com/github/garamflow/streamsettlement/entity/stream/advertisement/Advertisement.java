@@ -46,6 +46,40 @@ public class Advertisement {
     @OneToMany(mappedBy = "advertisement")
     private List<AdvertisementContentPost> contentPosts = new ArrayList<>();
 
+    public static Builder builder() {
+      return new Builder();
+  }
+
+  @Getter
+  public static class Builder {
+      private String title;
+      private String description;
+      private Long pricePerView;
+
+      public Builder title(String title) {
+          this.title = title;
+          return this;
+      }
+
+      public Builder description(String description) {
+          this.description = description;
+          return this;
+      }
+
+      public Builder pricePerView(Long pricePerView) {
+          this.pricePerView = pricePerView;
+          return this;
+      }
+
+      public Advertisement build() {
+          Advertisement advertisement = new Advertisement();
+          advertisement.title = this.title;
+          advertisement.description = this.description;
+          advertisement.pricePerView = this.pricePerView;
+          return advertisement;
+      }
+  }
+
     public void incrementViews(int count) {
         this.totalViews += count;
     }
