@@ -151,3 +151,4 @@ replay_pid*
 # Compiled 및 임시 파일
 *.ctxt
 .mtj.tmp/
+/mysql_batch_data/

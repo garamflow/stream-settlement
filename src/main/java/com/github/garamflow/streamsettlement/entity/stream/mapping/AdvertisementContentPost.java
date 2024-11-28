@@ -30,4 +30,28 @@ public class AdvertisementContentPost {
         this.advertisement = advertisement;
         this.contentPost = contentPost;
     }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    @Getter
+    public static class Builder {
+        private Advertisement advertisement;
+        private ContentPost contentPost;
+
+        public Builder advertisement(Advertisement advertisement) {
+            this.advertisement = advertisement;
+            return this;
+        }
+
+        public Builder contentPost(ContentPost contentPost) {
+            this.contentPost = contentPost;
+            return this;
+        }
+
+        public AdvertisementContentPost build() {
+            return new AdvertisementContentPost(advertisement, contentPost);
+        }
+    }
 }

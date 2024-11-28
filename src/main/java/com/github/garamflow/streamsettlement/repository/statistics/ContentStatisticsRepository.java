@@ -11,7 +11,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
-public interface StatisticsRepository extends JpaRepository<ContentStatistics, Long> {
+public interface ContentStatisticsRepository extends JpaRepository<ContentStatistics, Long> {
     List<ContentStatistics> findTop5ByPeriodAndStatisticsDateOrderByViewCountDesc(
             StatisticsPeriod period, LocalDate date, Pageable pageable
     );
@@ -19,6 +19,9 @@ public interface StatisticsRepository extends JpaRepository<ContentStatistics, L
     List<ContentStatistics> findTop5ByPeriodAndStatisticsDateOrderByWatchTimeDesc(
             StatisticsPeriod period, LocalDate date, Pageable pageable
     );
+
+    @Query("SELECT s FROM ContentStatistics s JOIN FETCH s.contentPost WHERE s.statisticsDate = :date")
+    List<ContentStatistics> findAllWithContentPostByDate(@Param("date") LocalDate date);
 
     @Query("""
                 SELECT COALESCE(MAX(cs.accumulatedViews), 0)

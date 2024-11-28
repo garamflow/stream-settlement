@@ -2,7 +2,7 @@ package com.github.garamflow.streamsettlement.controller.statistics;
 
 import com.github.garamflow.streamsettlement.controller.dto.stream.response.ContentStatisticsResponse;
 import com.github.garamflow.streamsettlement.entity.statistics.StatisticsPeriod;
-import com.github.garamflow.streamsettlement.service.statistics.StatisticsService;
+import com.github.garamflow.streamsettlement.service.statistics.ContentStatisticsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,16 +15,16 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/statistics")
-public class StatisticsController {
+public class ContentStatisticsController {
 
-    private final StatisticsService statisticsService;
+    private final ContentStatisticsService contentStatisticsService;
 
     @GetMapping("/top-views")
     public ResponseEntity<List<ContentStatisticsResponse>> getTopByViews(
             @RequestParam StatisticsPeriod period
     ) {
 
-        List<ContentStatisticsResponse> responses = statisticsService
+        List<ContentStatisticsResponse> responses = contentStatisticsService
                 .getTop5Views(period);
 
         return ResponseEntity.ok(responses);
@@ -35,7 +35,7 @@ public class StatisticsController {
             @RequestParam StatisticsPeriod period
     ) {
 
-        List<ContentStatisticsResponse> responses = statisticsService
+        List<ContentStatisticsResponse> responses = contentStatisticsService
                 .getTop5WatchTime(period);
 
         return ResponseEntity.ok(responses);

@@ -3,7 +3,7 @@ package com.github.garamflow.streamsettlement.service.statistics;
 import com.github.garamflow.streamsettlement.controller.dto.stream.response.ContentStatisticsResponse;
 import com.github.garamflow.streamsettlement.entity.statistics.ContentStatistics;
 import com.github.garamflow.streamsettlement.entity.statistics.StatisticsPeriod;
-import com.github.garamflow.streamsettlement.repository.statistics.StatisticsRepository;
+import com.github.garamflow.streamsettlement.repository.statistics.ContentStatisticsRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -19,14 +19,14 @@ import static java.time.temporal.TemporalAdjusters.previousOrSame;
 @Service
 @RequiredArgsConstructor
 @Transactional
-public class StatisticsService {
+public class ContentStatisticsService {
 
-    private final StatisticsRepository statisticsRepository;
+    private final ContentStatisticsRepository contentStatisticsRepository;
 
     public List<ContentStatisticsResponse> getTop5Views(StatisticsPeriod period) {
         LocalDate targetDate = getTargetDate(period);
         Pageable pageable = PageRequest.of(0, 5);
-        List<ContentStatistics> statistics = statisticsRepository.findTop5ByPeriodAndStatisticsDateOrderByViewCountDesc(period, targetDate, pageable);
+        List<ContentStatistics> statistics = contentStatisticsRepository.findTop5ByPeriodAndStatisticsDateOrderByViewCountDesc(period, targetDate, pageable);
 
         return statistics.stream()
                 .map(ContentStatisticsResponse::from)
@@ -36,7 +36,7 @@ public class StatisticsService {
     public List<ContentStatisticsResponse> getTop5WatchTime(StatisticsPeriod period) {
         LocalDate targetDate = getTargetDate(period);
         Pageable pageable = PageRequest.of(0, 5);
-        List<ContentStatistics> statistics = statisticsRepository
+        List<ContentStatistics> statistics = contentStatisticsRepository
                 .findTop5ByPeriodAndStatisticsDateOrderByWatchTimeDesc(period, targetDate, pageable);
 
         return statistics.stream()
