@@ -1,6 +1,5 @@
 package com.github.garamflow.streamsettlement.service.settlement;
 
-import com.github.garamflow.streamsettlement.batch.settlement.SettlementScheduler;
 import com.github.garamflow.streamsettlement.entity.settlement.Settlement;
 import com.github.garamflow.streamsettlement.repository.settlement.SettlementRepository;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +19,6 @@ import java.util.List;
 public class SettlementService {
 
     private final SettlementRepository settlementRepository;
-    private final SettlementScheduler settlementScheduler;
 
     /**
      * 일별 정산 내역을 조회합니다.
