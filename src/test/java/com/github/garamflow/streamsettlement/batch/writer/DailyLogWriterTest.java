@@ -193,6 +193,39 @@ class DailyLogWriterTest {
         assertThat(updatedPost.getTotalWatchTime()).isEqualTo(300L);
     }
 
+
+    @Test
+    void 동기화된_누적_시청시간_업데이트가_정상적으로_작동한다() throws Exception {
+        // given
+        long initialWatchTime = 100L;
+        contentPost.addWatchTime(initialWatchTime); // 초기 누적 시청 시간 설정
+        contentPostRepository.save(contentPost);
+
+        List<ContentStatistics> statistics = Arrays.asList(
+                createContentStatistics(150L, 1L),
+                createContentStatistics(250L, 1L)
+        );
+
+        // when
+        writer.write(new Chunk<>(statistics));
+
+        // then
+        ContentPost updatedPost = contentPostRepository.findById(contentPost.getId()).orElseThrow();
+        assertThat(updatedPost.getTotalWatchTime())
+                .isEqualTo(initialWatchTime + 150L + 250L); // 초기값 + 새로운 시청시간 합산
+    }
+
+    @Test
+    void 빈_청크_입력시_예외없이_처리된다() {
+        // given
+        List<ContentStatistics> emptyStatistics = List.of();
+
+        // when & then
+        assertThatNoException()
+                .isThrownBy(() -> writer.write(new Chunk<>(emptyStatistics)));
+    }
+
+
     private Member createMember() {
         String uniqueEmail = "test" + System.currentTimeMillis() + "@test.com";
         Member member = new Member.Builder()

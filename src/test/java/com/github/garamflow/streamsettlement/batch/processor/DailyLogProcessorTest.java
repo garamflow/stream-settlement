@@ -80,8 +80,9 @@ class DailyLogProcessorTest {
         // when & then
         assertThatThrownBy(() -> processor.process(log))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("ContentPost is null");
+                .hasMessageContaining("ContentPost");
     }
+
 
     @Test
     void Member가_null이면_예외를_던진다() {
@@ -93,11 +94,44 @@ class DailyLogProcessorTest {
         // Reflection을 사용하여 member를 null로 설정
         ReflectionTestUtils.setField(log, "member", null);
 
+        // 설정 확인
+        assertThat(log.getMember()).isNull(); // member가 null인지 확인
+
         // when & then
         assertThatThrownBy(() -> processor.process(log))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("contains null fields");
+                .hasMessageContaining("DailyMemberViewLog contains null fields: member is null");
     }
+
+
+    @Test
+    void 다른_상태의_시청로그는_처리하지_않는다() {
+        // given
+        Member member = createMember();
+        ContentPost contentPost = createContentPost(member);
+        DailyMemberViewLog pausedLog = createLogWithStatus(member, contentPost, StreamingStatus.PAUSED);
+        DailyMemberViewLog canceledLog = createLogWithStatus(member, contentPost, StreamingStatus.STOPPED);
+
+        // when
+        ContentStatistics pausedResult = processor.process(pausedLog);
+        ContentStatistics canceledResult = processor.process(canceledLog);
+
+        // then
+        assertThat(pausedResult).isNull();
+        assertThat(canceledResult).isNull();
+    }
+
+    private DailyMemberViewLog createLogWithStatus(Member member, ContentPost contentPost, StreamingStatus status) {
+        return DailyMemberViewLog.builder()
+                .member(member)
+                .contentPost(contentPost)
+                .lastViewedPosition(0)
+                .lastAdViewCount(0)
+                .logDate(LocalDate.now())
+                .status(status)
+                .build();
+    }
+
 
     private Member createMember() {
         return new Member.Builder()
