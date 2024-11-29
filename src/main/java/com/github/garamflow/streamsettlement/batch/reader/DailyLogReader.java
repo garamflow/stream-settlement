@@ -31,10 +31,19 @@ public class DailyLogReader {
     @Bean
     @StepScope
     public JdbcPagingItemReader<DailyMemberViewLog> reader(
-            @Value("#{jobParameters['targetDate']}") String targetDateStr) {
-        
+            @Value("#{jobParameters['targetDate']}") String targetDateStr,
+            @Value("#{stepExecutionContext['minId']}") Long minId,
+            @Value("#{stepExecutionContext['maxId']}") Long maxId) {
+
+        // 유효성 검사
+        if (minId == null || maxId == null) {
+            throw new IllegalStateException("StepExecutionContext missing 'minId' or 'maxId'.");
+        }
+
         LocalDate targetDate = validateAndParseDate(targetDateStr);
         MySqlPagingQueryProvider queryProvider = createQueryProvider();
+
+        log.info("Reader initialized for targetDate: {}, minId: {}, maxId: {}", targetDate, minId, maxId);
 
         return new JdbcPagingItemReaderBuilder<DailyMemberViewLog>()
                 .name("dailyLogReader")
@@ -43,27 +52,34 @@ public class DailyLogReader {
                 .fetchSize(CHUNK_SIZE)
                 .rowMapper(rowMapper)
                 .queryProvider(queryProvider)
-                .parameterValues(Map.of("targetDate", targetDate))
+                .parameterValues(Map.of(
+                        "targetDate", targetDate,
+                        "minId", minId,
+                        "maxId", maxId
+                ))
                 .build();
     }
 
     private MySqlPagingQueryProvider createQueryProvider() {
-      MySqlPagingQueryProvider queryProvider = new MySqlPagingQueryProvider();
-      queryProvider.setSelectClause("""
-              d.daily_member_view_log_id, d.last_viewed_position, d.last_ad_view_count, 
-              d.log_date, d.streaming_status,
-              m.member_id,
-              c.content_post_id
-              """);
-      queryProvider.setFromClause("""
-              daily_member_view_log d
-              JOIN member m ON d.member_id = m.member_id
-              JOIN content_post c ON d.content_post_id = c.content_post_id
-              """);
-      queryProvider.setWhereClause("d.log_date = :targetDate");
-      queryProvider.setSortKeys(Map.of("d.daily_member_view_log_id", Order.ASCENDING));
-      return queryProvider;
-  }
+        MySqlPagingQueryProvider queryProvider = new MySqlPagingQueryProvider();
+        queryProvider.setSelectClause("""
+                d.daily_member_view_log_id, d.last_viewed_position, d.last_ad_view_count,
+                d.log_date, d.streaming_status,
+                m.member_id,
+                c.content_post_id
+                """);
+        queryProvider.setFromClause("""
+                daily_member_view_log d
+                JOIN member m ON d.member_id = m.member_id
+                JOIN content_post c ON d.content_post_id = c.content_post_id
+                """);
+        queryProvider.setWhereClause("""
+                d.log_date = :targetDate
+                AND d.content_post_id BETWEEN :minId AND :maxId
+                """);
+        queryProvider.setSortKeys(Map.of("d.daily_member_view_log_id", Order.ASCENDING));
+        return queryProvider;
+    }
 
     private LocalDate validateAndParseDate(String targetDateStr) {
         if (targetDateStr == null || targetDateStr.isBlank()) {

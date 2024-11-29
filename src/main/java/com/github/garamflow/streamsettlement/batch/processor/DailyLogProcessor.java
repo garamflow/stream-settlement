@@ -18,23 +18,27 @@ public class DailyLogProcessor implements ItemProcessor<DailyMemberViewLog, Cont
 
     @Override
     public ContentStatistics process(@NonNull DailyMemberViewLog dailyLog) {
-        // Null 체크 및 상태 확인
+        // 상태 확인
         if (dailyLog.getStatus() != StreamingStatus.COMPLETED) {
+            log.warn("Skipping log with status {} for ID: {}", dailyLog.getStatus(), dailyLog.getId());
             return null;
         }
 
-        // ContentPost 를 변수로 분리
+        // ContentPost null 체크
         ContentPost contentPost = dailyLog.getContentPost();
         if (contentPost == null) {
-            throw new IllegalStateException("ContentPost is null for DailyMemberViewLog with ID: " + dailyLog.getId());
+            log.error("ContentPost is null for DailyMemberViewLog ID: {}", dailyLog.getId());
+            throw new IllegalStateException("ContentPost cannot be null.");
         }
 
-        // 필드 유효성 검증
-        if (dailyLog.getMember() == null || dailyLog.getLogDate() == null) {
-            throw new IllegalStateException("DailyMemberViewLog contains null fields");
+        // Member null 체크
+        if (dailyLog.getMember() == null) {
+            log.error("Member is null for DailyMemberViewLog ID: {}", dailyLog.getId());
+            throw new IllegalStateException("DailyMemberViewLog contains null fields: member is null");
         }
 
         // ContentStatistics 생성
+        log.debug("Processing log ID: {}", dailyLog.getId());
         return new ContentStatistics.Builder()
                 .contentPost(contentPost)
                 .statisticsDate(dailyLog.getLogDate())
