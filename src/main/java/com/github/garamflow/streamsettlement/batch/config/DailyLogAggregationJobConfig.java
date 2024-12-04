@@ -19,12 +19,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.task.TaskExecutor;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 @RequiredArgsConstructor
@@ -34,7 +36,7 @@ public class DailyLogAggregationJobConfig {
     private final PlatformTransactionManager transactionManager;
     private final DailyLogPartitioner partitioner;
 
-    @Value("${batch.partition.size:5}")  // 기본값 5
+    @Value("${batch.partition.size:4}")  // 기본값 4
     private int partitionSize;
 
     @Bean
@@ -57,14 +59,17 @@ public class DailyLogAggregationJobConfig {
 
     @Bean
     public Step workerStep(
-            JdbcPagingItemReader<DailyMemberViewLog> dailyLogReader,
+            JdbcPagingItemReader<DailyMemberViewLog> reader,
             DailyLogProcessor dailyLogProcessor,
             DailyLogWriter dailyLogWriter) {
         return new StepBuilder("workerStep", jobRepository)
-                .<DailyMemberViewLog, ContentStatistics>chunk(200, transactionManager)
-                .reader(dailyLogReader)
+                .<DailyMemberViewLog, List<ContentStatistics>>chunk(50, transactionManager)
+                .reader(reader)
                 .processor(dailyLogProcessor)
                 .writer(dailyLogWriter)
+                .faultTolerant()
+                .retryLimit(3)
+                .retry(CannotAcquireLockException.class)
                 .build();
     }
 
@@ -86,7 +91,7 @@ public class DailyLogAggregationJobConfig {
         CompositeJobParametersValidator compositeValidator = new CompositeJobParametersValidator();
         compositeValidator.setValidators(Arrays.asList(
                 defaultValidator,
-                (JobParametersValidator) parameters -> {
+                parameters -> {
                     // targetDate 파라미터를 문자열로 가져오기
                     String targetDate = parameters.getString("targetDate");
                     if (targetDate == null || targetDate.isEmpty()) {
