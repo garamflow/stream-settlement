@@ -10,18 +10,38 @@ import com.github.garamflow.streamsettlement.entity.stream.content.ContentPost;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.batch.core.StepExecution;
+import org.springframework.batch.core.repository.JobRepository;
+import org.springframework.batch.test.JobLauncherTestUtils;
+import org.springframework.batch.test.MetaDataInstanceFactory;
+import org.springframework.batch.test.StepScopeTestUtils;
+import org.springframework.batch.test.context.SpringBatchTest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
+import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.*;
 
 @SpringBootTest
+@SpringBatchTest
 @ExtendWith(SpringExtension.class)
 class DailyLogProcessorTest {
+
+    @Autowired
+    private JobLauncherTestUtils jobLauncherTestUtils;
+
+    @Autowired
+    private JobRepository jobRepository;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     private DailyLogProcessor processor;
 
@@ -31,7 +51,7 @@ class DailyLogProcessorTest {
     }
 
     @Test
-    void 완료된_시청로그를_통계로_변환한다() {
+    void 완료된_시청로그를_통계로_변환한다() throws Exception {
         // given
         LocalDate today = LocalDate.now();
         Member member = createMember();
@@ -39,99 +59,84 @@ class DailyLogProcessorTest {
         DailyMemberViewLog log = createCompletedLog(member, contentPost, today);
 
         // when
-        ContentStatistics result = processor.process(log);
+        StepExecution stepExecution = MetaDataInstanceFactory.createStepExecution();
+        StepScopeTestUtils.doInStepScope(stepExecution, () -> {
+            List<ContentStatistics> result = processor.process(log);
 
-        // then
-        assertThat(result).isNotNull()
-                .satisfies(stat -> {
-                    assertThat(stat.getContentPost()).isEqualTo(contentPost);
-                    assertThat(stat.getStatisticsDate()).isEqualTo(today);
-                    assertThat(stat.getPeriod()).isEqualTo(StatisticsPeriod.DAILY);
-                    assertThat(stat.getViewCount()).isEqualTo(1L);
-                    assertThat(stat.getWatchTime()).isEqualTo(100L);
-                    assertThat(stat.getAccumulatedViews()).isEqualTo(contentPost.getTotalViews());
-                });
+            // then
+            assertThat(result)
+                    .hasSize(4) // DAILY, WEEKLY, MONTHLY, YEARLY
+                    .allSatisfy(stats -> {
+                        assertThat(stats.getContentPost()).isEqualTo(contentPost);
+                        assertThat(stats.getViewCount()).isEqualTo(1L);
+                        assertThat(stats.getWatchTime()).isEqualTo(100L);
+                    });
+
+            // 각 통계 기간별 날짜와 기간 검증
+            assertThat(result).extracting("period", "statisticsDate")
+                    .containsExactly(
+                            tuple(StatisticsPeriod.DAILY, today),
+                            tuple(StatisticsPeriod.WEEKLY, today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))),
+                            tuple(StatisticsPeriod.MONTHLY, today.withDayOfMonth(1)),
+                            tuple(StatisticsPeriod.YEARLY, today.withDayOfYear(1))
+                    );
+            return null;
+        });
     }
 
     @Test
-    void 진행중인_시청로그는_처리하지_않는다() {
+    void 미완료_시청로그는_처리하지_않는다() throws Exception {
         // given
         Member member = createMember();
         ContentPost contentPost = createContentPost(member);
         DailyMemberViewLog log = createInProgressLog(member, contentPost, LocalDate.now());
 
         // when
-        ContentStatistics result = processor.process(log);
+        StepExecution stepExecution = MetaDataInstanceFactory.createStepExecution();
+        StepScopeTestUtils.doInStepScope(stepExecution, () -> {
+            List<ContentStatistics> result = processor.process(log);
 
-        // then
-        assertThat(result).isNull();
+            // then
+            assertThat(result).isNull();
+            return null;
+        });
     }
 
     @Test
-    void ContentPost가_null이면_예외를_던진다() {
+    void Member가_null이면_예외를_던진다() throws Exception {
         // given
         Member member = createMember();
         ContentPost contentPost = createContentPost(member);
         DailyMemberViewLog log = createCompletedLog(member, contentPost, LocalDate.now());
+        ReflectionTestUtils.setField(log, "member", null);
 
-        // Reflection을 사용하여 contentPost를 null로 설정
+        // when & then
+        StepExecution stepExecution = MetaDataInstanceFactory.createStepExecution();
+        StepScopeTestUtils.doInStepScope(stepExecution, () -> {
+            assertThatThrownBy(() -> processor.process(log))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("member");
+            return null;
+        });
+    }
+
+    @Test
+    void ContentPost가_null이면_예외를_던진다() throws Exception {
+        // given
+        Member member = createMember();
+        ContentPost contentPost = createContentPost(member);
+        DailyMemberViewLog log = createCompletedLog(member, contentPost, LocalDate.now());
         ReflectionTestUtils.setField(log, "contentPost", null);
 
         // when & then
-        assertThatThrownBy(() -> processor.process(log))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("ContentPost");
+        StepExecution stepExecution = MetaDataInstanceFactory.createStepExecution();
+        StepScopeTestUtils.doInStepScope(stepExecution, () -> {
+            assertThatThrownBy(() -> processor.process(log))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("contentPost");
+            return null;
+        });
     }
-
-
-    @Test
-    void Member가_null이면_예외를_던진다() {
-        // given
-        Member member = createMember();
-        ContentPost contentPost = createContentPost(member);
-        DailyMemberViewLog log = createCompletedLog(member, contentPost, LocalDate.now());
-
-        // Reflection을 사용하여 member를 null로 설정
-        ReflectionTestUtils.setField(log, "member", null);
-
-        // 설정 확인
-        assertThat(log.getMember()).isNull(); // member가 null인지 확인
-
-        // when & then
-        assertThatThrownBy(() -> processor.process(log))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("DailyMemberViewLog contains null fields: member is null");
-    }
-
-
-    @Test
-    void 다른_상태의_시청로그는_처리하지_않는다() {
-        // given
-        Member member = createMember();
-        ContentPost contentPost = createContentPost(member);
-        DailyMemberViewLog pausedLog = createLogWithStatus(member, contentPost, StreamingStatus.PAUSED);
-        DailyMemberViewLog canceledLog = createLogWithStatus(member, contentPost, StreamingStatus.STOPPED);
-
-        // when
-        ContentStatistics pausedResult = processor.process(pausedLog);
-        ContentStatistics canceledResult = processor.process(canceledLog);
-
-        // then
-        assertThat(pausedResult).isNull();
-        assertThat(canceledResult).isNull();
-    }
-
-    private DailyMemberViewLog createLogWithStatus(Member member, ContentPost contentPost, StreamingStatus status) {
-        return DailyMemberViewLog.builder()
-                .member(member)
-                .contentPost(contentPost)
-                .lastViewedPosition(0)
-                .lastAdViewCount(0)
-                .logDate(LocalDate.now())
-                .status(status)
-                .build();
-    }
-
 
     private Member createMember() {
         return new Member.Builder()

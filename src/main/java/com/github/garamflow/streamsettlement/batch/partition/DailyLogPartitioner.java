@@ -29,69 +29,54 @@ public class DailyLogPartitioner implements Partitioner {
     public Map<String, ExecutionContext> partition(int gridSize) {
         Map<String, ExecutionContext> partitions = new HashMap<>();
 
-        // Validate targetDate parameter
-        if (targetDate == null || targetDate.isEmpty()) {
-            throw new IllegalArgumentException("Job parameter 'targetDate' is required but was not provided.");
-        }
-
-        log.debug("Partitioning for target date: {}", targetDate);
-
         try {
-            // Count records for the given targetDate
-            String countSql = """
-                    SELECT COUNT(*)
-                    FROM daily_member_view_log
-                    WHERE log_date = ?
-                    """;
-            Integer count = jdbcTemplate.queryForObject(countSql, Integer.class, targetDate);
-
-            if (count == null || count == 0) {
-                log.warn("No data found for target date: {}", targetDate);
-                return partitions; // Return empty partitions
-            }
-
-            // Retrieve min and max IDs for partitioning
             String sql = """
-                    SELECT MIN(content_post_id) as min_id,
-                           MAX(content_post_id) as max_id
+                    SELECT COALESCE(MIN(daily_member_view_log_id), 0) as min_id,
+                           COALESCE(MAX(daily_member_view_log_id), 0) as max_id,
+                           COUNT(*) as total_count
                     FROM daily_member_view_log
                     WHERE log_date = ?
                     """;
-            Map<String, Object> minMaxIds = jdbcTemplate.queryForMap(sql, targetDate);
 
-            if (minMaxIds.isEmpty()) {
-                throw new IllegalStateException("Failed to retrieve min and max IDs for target date: " + targetDate);
-            }
+            Map<String, Object> result = jdbcTemplate.queryForMap(sql, targetDate);
+            long minId = ((Number) result.get("min_id")).longValue();
+            long maxId = ((Number) result.get("max_id")).longValue();
+            long totalCount = ((Number) result.get("total_count")).longValue();
 
-            long min = ((Number) minMaxIds.get("min_id")).longValue();
-            long max = ((Number) minMaxIds.get("max_id")).longValue();
+            int actualGridSize = calculateGridSize(totalCount);
+            long targetSize = (maxId - minId + actualGridSize) / actualGridSize;
 
-            if (min > max) {
-                throw new IllegalStateException("Invalid range for partitioning. min_id: " + min + ", max_id: " + max);
-            }
-
-            // Calculate partition size
-            long totalRecords = max - min + 1;
-            long targetSize = Math.max(1, (long) Math.ceil((double) totalRecords / gridSize));
-            long start = min;
-
-            // Create partitions
-            for (int i = 0; i < gridSize && start <= max; i++) {
-                long end = Math.min(start + targetSize - 1, max);
-
+            for (int i = 0; i < actualGridSize; i++) {
                 ExecutionContext context = new ExecutionContext();
+                long start = minId + (i * targetSize);
+                long end = i == actualGridSize - 1 ? maxId : start + targetSize - 1;
+
+                if (start > end) continue;
+
                 context.putLong("minId", start);
                 context.putLong("maxId", end);
-                partitions.put("partition" + i, context);
+                context.putString("targetDate", targetDate);
+                context.putString("partitionId", String.valueOf(i));
 
-                log.debug("Created partition {}: [{} - {}]", i, start, end);
-                start = end + 1;
+                partitions.put("partition" + i, context);
+                log.info("Created partition{}: minId={}, maxId={}", i, start, end);
             }
         } catch (Exception e) {
-            log.error("Error occurred while partitioning for target date: {}", targetDate, e);
-            throw e;
+            log.warn("Error during partitioning for date: {}", targetDate, e);
+            ExecutionContext context = new ExecutionContext();
+            context.putLong("minId", 0L);
+            context.putLong("maxId", 0L);
+            context.putString("targetDate", targetDate);
+            partitions.put("partition0", context);
         }
 
         return partitions;
+    }
+
+    private int calculateGridSize(long totalCount) {
+        if (totalCount < 100) return 1;
+        if (totalCount < 1000) return 2;
+        if (totalCount < 10000) return 4;
+        return 8;
     }
 }

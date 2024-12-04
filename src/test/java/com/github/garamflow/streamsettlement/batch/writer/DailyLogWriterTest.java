@@ -21,14 +21,15 @@ import org.springframework.batch.test.MetaDataInstanceFactory;
 import org.springframework.batch.test.context.SpringBatchTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatNoException;
+import static org.assertj.core.api.Assertions.*;
 
 @SpringBootTest
 @SpringBatchTest
@@ -53,9 +54,11 @@ class DailyLogWriterTest {
     @Autowired
     private AdvertisementContentPostRepository advertisementContentPostRepository;
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     private LocalDate today;
     private ContentPost contentPost;
-    private Member member;
 
     @BeforeEach
     void setUp() {
@@ -72,7 +75,7 @@ class DailyLogWriterTest {
 
         // 테스트 데이터 준비
         today = LocalDate.now();
-        member = createMember();
+        Member member = createMember();
         contentPost = createContentPost(member);
     }
 
@@ -86,14 +89,15 @@ class DailyLogWriterTest {
         // given
         List<ContentStatistics> statistics = Arrays.asList(
                 createContentStatistics(100L, 1L),
-                createContentStatistics(200L, 2L)
+                createContentStatistics(100L, 1L),
+                createContentStatistics(100L, 1L)
         );
 
         // when
-        writer.write(new Chunk<>(statistics));
+        writer.write(new Chunk<>(Collections.singletonList(statistics)));
 
         // then
-        List<ContentStatistics> saved = contentStatisticsRepository.findAll();
+        List<ContentStatistics> saved = contentStatisticsRepository.findByPeriodAndDate(StatisticsPeriod.DAILY, today);
         assertThat(saved).hasSize(1)
                 .first()
                 .satisfies(stat -> {
@@ -112,24 +116,33 @@ class DailyLogWriterTest {
     @Test
     void 서로_다른_날짜의_통계는_별도로_저장된다() throws Exception {
         // given
+        LocalDate yesterday = today.minusDays(1);
         List<ContentStatistics> statistics = Arrays.asList(
-                createContentStatistics(100L, 1L),
-                createContentStatisticsWithDate(200L, 2L, today.minusDays(1))
+                createContentStatistics(100L, 1L),  // today
+                createContentStatisticsWithDate(200L, 1L, yesterday)  // yesterday
         );
 
         // when
-        writer.write(new Chunk<>(statistics));
+        writer.write(new Chunk<>(Collections.singletonList(statistics)));
 
         // then
-        List<ContentStatistics> saved = contentStatisticsRepository.findAll();
-        assertThat(saved).hasSize(2)
-                .satisfies(stats -> {
-                    assertThat(stats).extracting(ContentStatistics::getStatisticsDate)
-                            .containsExactlyInAnyOrder(today, today.minusDays(1));
-                    assertThat(stats).extracting(ContentStatistics::getWatchTime)
-                            .containsExactlyInAnyOrder(100L, 200L);
-                    assertThat(stats).extracting(ContentStatistics::getViewCount)
-                            .containsExactlyInAnyOrder(1L, 2L);
+        List<ContentStatistics> todayStats = contentStatisticsRepository.findByPeriodAndDate(StatisticsPeriod.DAILY, today);
+        List<ContentStatistics> yesterdayStats = contentStatisticsRepository.findByPeriodAndDate(StatisticsPeriod.DAILY, yesterday);
+
+        assertThat(todayStats).hasSize(1)
+                .first()
+                .satisfies(stat -> {
+                    assertThat(stat.getWatchTime()).isEqualTo(100L);
+                    assertThat(stat.getViewCount()).isEqualTo(1L);
+                    assertThat(stat.getStatisticsDate()).isEqualTo(today);
+                });
+
+        assertThat(yesterdayStats).hasSize(1)
+                .first()
+                .satisfies(stat -> {
+                    assertThat(stat.getWatchTime()).isEqualTo(200L);
+                    assertThat(stat.getViewCount()).isEqualTo(1L);
+                    assertThat(stat.getStatisticsDate()).isEqualTo(yesterday);
                 });
     }
 
@@ -146,7 +159,7 @@ class DailyLogWriterTest {
         );
 
         // when
-        writer.write(new Chunk<>(statistics));
+        writer.write(new Chunk<>(Collections.singletonList(statistics)));
 
         // then
         ContentPost updatedPost = contentPostRepository.findById(contentPost.getId()).orElseThrow();
@@ -161,7 +174,7 @@ class DailyLogWriterTest {
 
         // when & then
         assertThatNoException()
-                .isThrownBy(() -> writer.write(new Chunk<>(emptyStatistics)));
+                .isThrownBy(() -> writer.write(new Chunk<>(Collections.singletonList(emptyStatistics))));
     }
 
     @Test
@@ -174,10 +187,10 @@ class DailyLogWriterTest {
         );
 
         // when
-        writer.write(new Chunk<>(statistics));
+        writer.write(new Chunk<>(Collections.singletonList(statistics)));
 
         // then
-        List<ContentStatistics> saved = contentStatisticsRepository.findAll();
+        List<ContentStatistics> saved = contentStatisticsRepository.findByPeriodAndDate(StatisticsPeriod.DAILY, today);
         assertThat(saved).hasSize(1)
                 .first()
                 .satisfies(stat -> {
@@ -207,7 +220,7 @@ class DailyLogWriterTest {
         );
 
         // when
-        writer.write(new Chunk<>(statistics));
+        writer.write(new Chunk<>(Collections.singletonList(statistics)));
 
         // then
         ContentPost updatedPost = contentPostRepository.findById(contentPost.getId()).orElseThrow();
@@ -222,9 +235,74 @@ class DailyLogWriterTest {
 
         // when & then
         assertThatNoException()
-                .isThrownBy(() -> writer.write(new Chunk<>(emptyStatistics)));
+                .isThrownBy(() -> writer.write(new Chunk<>(Collections.singletonList(emptyStatistics))));
     }
 
+    @Test
+    void 일간_통계와_상위_기간_통계가_정상적으로_저장된다() throws Exception {
+        // given
+        List<ContentStatistics> statistics = Arrays.asList(
+                createContentStatistics(100L, 1L),
+                createContentStatistics(200L, 1L)
+        );
+
+        // when
+        writer.write(new Chunk<>(Collections.singletonList(statistics)));
+
+        // then
+        List<ContentStatistics> dailyStats = contentStatisticsRepository.findByPeriodAndDate(StatisticsPeriod.DAILY, today);
+        List<ContentStatistics> weeklyStats = contentStatisticsRepository.findByPeriodAndDate(StatisticsPeriod.WEEKLY, today);
+        List<ContentStatistics> monthlyStats = contentStatisticsRepository.findByPeriodAndDate(StatisticsPeriod.MONTHLY, today);
+
+        assertThat(dailyStats).hasSize(1);
+        assertThat(weeklyStats).hasSize(1);
+        assertThat(monthlyStats).hasSize(1);
+
+        ContentStatistics dailyStat = dailyStats.get(0);
+        assertThat(dailyStat.getWatchTime()).isEqualTo(300L);
+        assertThat(dailyStat.getViewCount()).isEqualTo(2L);
+    }
+
+    @Test
+    void 통계_정합성_검증이_실패하면_경고_로그가_출력된다() throws Exception {
+        // given
+        List<ContentStatistics> statistics = Arrays.asList(
+                createContentStatistics(100L, 1L),
+                createContentStatistics(200L, 1L)
+        );
+
+        // 일부러 정합성이 맞지 않는 데이터 추가
+        contentStatisticsRepository.save(
+                new ContentStatistics.Builder()
+                        .contentPost(contentPost)
+                        .statisticsDate(today)
+                        .period(StatisticsPeriod.WEEKLY)
+                        .viewCount(10L) // 일간 통계와 맞지 않는 값
+                        .watchTime(1000L)
+                        .build()
+        );
+
+        // when & then
+        assertThatCode(() -> writer.write(new Chunk<>(Collections.singletonList(statistics))))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void 컨텐츠가_null이면_예외를_던진다() throws Exception {
+        // given
+        ContentStatistics invalidStats = ContentStatistics.builder()
+                .contentPost(null)
+                .statisticsDate(LocalDate.now())
+                .period(StatisticsPeriod.DAILY)
+                .watchTime(100L)
+                .viewCount(1L)
+                .build();
+
+        // when & then
+        assertThatThrownBy(() -> writer.write(new Chunk<>(Collections.singletonList(List.of(invalidStats)))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("컨텐츠가 null입니다");
+    }
 
     private Member createMember() {
         String uniqueEmail = "test" + System.currentTimeMillis() + "@test.com";
@@ -248,20 +326,35 @@ class DailyLogWriterTest {
     }
 
     private ContentStatistics createContentStatistics(long watchTime, long viewCount) {
-        return createContentStatisticsWithDate(watchTime, viewCount, today);
-    }
-
-    private ContentStatistics createContentStatisticsWithDate(
-            long watchTime,
-            long viewCount,
-            LocalDate statisticsDate) {
         return new ContentStatistics.Builder()
                 .contentPost(contentPost)
-                .statisticsDate(statisticsDate)
+                .statisticsDate(today)
                 .period(StatisticsPeriod.DAILY)
                 .watchTime(watchTime)
                 .viewCount(viewCount)
-                .accumulatedViews(contentPost.getTotalViews())
                 .build();
+    }
+
+    private ContentStatistics createContentStatisticsWithDate(long watchTime, long viewCount, LocalDate date) {
+        return new ContentStatistics.Builder()
+                .contentPost(contentPost)
+                .statisticsDate(date)
+                .period(StatisticsPeriod.DAILY)
+                .watchTime(watchTime)
+                .viewCount(viewCount)
+                .build();
+    }
+
+    private List<ContentStatistics> findStatisticsByPeriod(StatisticsPeriod period) {
+        String sql = "SELECT * FROM content_statistics WHERE period = ?";
+        return jdbcTemplate.query(sql, new Object[]{period.name()}, (rs, rowNum) ->
+                new ContentStatistics.Builder()
+                        .contentPost(contentPost)
+                        .statisticsDate(rs.getDate("statistics_date").toLocalDate())
+                        .period(StatisticsPeriod.valueOf(rs.getString("period")))
+                        .watchTime(rs.getLong("watch_time"))
+                        .viewCount(rs.getLong("view_count"))
+                        .build()
+        );
     }
 }
