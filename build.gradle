@@ -50,6 +50,7 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testCompileOnly 'org.projectlombok:lombok'
     testAnnotationProcessor 'org.projectlombok:lombok'
+    testImplementation 'org.jfree:jfreechart:1.5.4'
 }
 
 tasks.named('test') {
