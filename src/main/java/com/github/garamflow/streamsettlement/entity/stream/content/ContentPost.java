@@ -17,7 +17,15 @@ import java.util.Objects;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "content_post")
+@Table(
+    name = "content_post",
+    indexes = {
+        @Index(
+            name = "idx_content_member_status",
+            columnList = "member_id,status"
+        )
+    }
+)
 public class ContentPost {
 
     @Id

@@ -18,6 +18,16 @@ import java.time.LocalDate;
                         name = "unique_content_statistics", // 제약 조건 이름
                         columnNames = {"content_post_id", "statistics_date", "period"}
                 )
+        },
+        indexes = {
+                @Index(
+                        name = "idx_content_stats_lookup",
+                        columnList = "content_post_id,statistics_date,period"
+                ),
+                @Index(
+                        name = "idx_content_stats_date_period",
+                        columnList = "statistics_date,period"
+                )
         }
 )
 public class ContentStatistics {
