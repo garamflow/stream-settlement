@@ -20,6 +20,23 @@ public class TestDataGenerator {
         executeDataGeneration(memberCount, contentCount, adCount, viewLogCount);
     }
 
+    @Transactional
+    public void clearAllData() {
+        // 외래키 제약조건 비활성화
+        entityManager.createNativeQuery("SET FOREIGN_KEY_CHECKS = 0").executeUpdate();
+
+        // 모든 테이블 데이터 삭제
+        entityManager.createNativeQuery("DELETE FROM content_statistics").executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM daily_member_view_log").executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM advertisement_content_post").executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM advertisement").executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM content_post").executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM member").executeUpdate();
+
+        // 외래키 제약조건 다시 활성화
+        entityManager.createNativeQuery("SET FOREIGN_KEY_CHECKS = 1").executeUpdate();
+    }
+
     private void initializeDatabase() {
         // 외래키 제약조건 비활성화
         entityManager.createNativeQuery("SET FOREIGN_KEY_CHECKS = 0").executeUpdate();
