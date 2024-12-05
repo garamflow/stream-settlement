@@ -13,22 +13,21 @@ import java.util.List;
 
 public class PerformanceVisualizer {
 
-    public static void createPerformanceChart(String title,
-                                              List<Integer> xValues,
-                                              List<List<Double>> yValuesList,
-                                              String xAxisLabel,
-                                              String yAxisLabel,
-                                              String outputPath) throws IOException {
+    public static void createPerformanceChart(
+            String title,
+            List<Integer> xValues,
+            List<List<Double>> yValuesList,
+            List<String> seriesNames,
+            String xAxisLabel,
+            String yAxisLabel,
+            String outputPath) throws IOException {
         File outputFile = new File(outputPath);
         outputFile.getParentFile().mkdirs();
 
         XYSeriesCollection dataset = new XYSeriesCollection();
 
-// 시리즈 이름을 명확하게 설정
-        String[] seriesNames = {"파티셔닝 미적용", "파티셔닝 적용"};
-
         for (int seriesIndex = 0; seriesIndex < yValuesList.size(); seriesIndex++) {
-            XYSeries series = new XYSeries(seriesNames[seriesIndex]);
+            XYSeries series = new XYSeries(seriesNames.get(seriesIndex));
             List<Double> yValues = yValuesList.get(seriesIndex);
 
             for (int i = 0; i < xValues.size(); i++) {
