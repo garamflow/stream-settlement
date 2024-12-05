@@ -55,10 +55,14 @@
 - [트러블슈팅](https://github.com/garamflow/stream-settlement/wiki#%ED%8A%B8%EB%9F%AC%EB%B8%94%EC%8A%88%ED%8C%85)
 - [테스트 전략](https://github.com/garamflow/stream-settlement/wiki#%ED%85%8C%EC%8A%A4%ED%8A%B8-%EC%A0%84%EB%9E%B5)
 
-## 기술 스택
-- Java 21
-- Spring Boot 3.3
-- Spring Batch 3.3.4
-- MySQL 8.0
-- Docker & Docker Compose
-- JUnit 5
+## 🛠️ 기술 스택
+| 분야            | 기술 스택                                                                                                      |
+  |-----------------|----------------------------------------------------------------------------------------------------------------|
+| **Language**    | ![Java](https://img.shields.io/badge/Java-21-%23ED8B00?logo=openjdk&logoColor=white) |
+| **Framework**   | ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3-%236DB33F?logo=spring-boot&logoColor=white) ![Spring Batch](https://img.shields.io/badge/Spring%20Batch-3.3.4-%236DB33F?logo=spring&logoColor=white) ![Spring Data JPA](https://img.shields.io/badge/Spring%20Data%20JPA-%236DB33F?logo=spring&logoColor=white)       |
+| **Build**       | ![Gradle](https://img.shields.io/badge/Gradle-%2302303A?logo=gradle&logoColor=white)                           |
+| **Database**    | ![MySQL](https://img.shields.io/badge/MySQL-8.0-%234479A1?logo=mysql&logoColor=white)                          |
+| **DevOps**      | ![Docker](https://img.shields.io/badge/Docker-%232496ED?logo=docker&logoColor=white) ![Docker Compose](https://img.shields.io/badge/Docker%20Compose-%232496ED?logo=docker&logoColor=white)                           |
+| **Testing**     | ![JUnit](https://img.shields.io/badge/JUnit-5-%2325A162?logo=junit5&logoColor=white)                           |
+| **IDE**         | ![IntelliJ IDEA](https://img.shields.io/badge/IntelliJ%20IDEA-%23000000?logo=intellij-idea&logoColor=white)    |
+| **Version Control** | ![Git](https://img.shields.io/badge/Git-%23F05032?logo=git&logoColor=white)                               |
