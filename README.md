@@ -47,14 +47,6 @@
 
 ---
 
-## Wiki
-
-- [실행 방법](https://github.com/garamflow/stream-settlement/wiki#%EC%8B%A4%ED%96%89-%EB%B0%A9%EB%B2%95)
-- [시스템 아키텍처](../../wiki/Architecture)
-- [ERD](../../wiki/ERD)
-- [트러블슈팅](https://github.com/garamflow/stream-settlement/wiki#%ED%8A%B8%EB%9F%AC%EB%B8%94%EC%8A%88%ED%8C%85)
-- [테스트 전략](https://github.com/garamflow/stream-settlement/wiki#%ED%85%8C%EC%8A%A4%ED%8A%B8-%EC%A0%84%EB%9E%B5)
-
 ## 🛠️ 기술 스택
 | 분야            | 기술 스택                                                                                                      |
   |-----------------|----------------------------------------------------------------------------------------------------------------|
@@ -66,3 +58,13 @@
 | **Testing**     | ![JUnit](https://img.shields.io/badge/JUnit-5-%2325A162?logo=junit5&logoColor=white)                           |
 | **IDE**         | ![IntelliJ IDEA](https://img.shields.io/badge/IntelliJ%20IDEA-%23000000?logo=intellij-idea&logoColor=white)    |
 | **Version Control** | ![Git](https://img.shields.io/badge/Git-%23F05032?logo=git&logoColor=white)                               |
+
+---
+
+## Wiki
+
+- **[실행 방법](https://github.com/garamflow/stream-settlement/wiki#%EC%8B%A4%ED%96%89-%EB%B0%A9%EB%B2%95)**
+- **[시스템 아키텍처](../../wiki/Architecture)**
+- **[ERD](../../wiki/ERD)**
+- **[트러블슈팅](https://github.com/garamflow/stream-settlement/wiki#%ED%8A%B8%EB%9F%AC%EB%B8%94%EC%8A%88%ED%8C%85)**
+- **[테스트 전략](https://github.com/garamflow/stream-settlement/wiki#%ED%85%8C%EC%8A%A4%ED%8A%B8-%EC%A0%84%EB%9E%B5)**
