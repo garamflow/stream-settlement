@@ -15,7 +15,19 @@ import java.time.LocalDateTime;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "daily_member_view_log")
+@Table(
+    name = "daily_member_view_log",
+    indexes = {
+        @Index(
+            name = "idx_daily_log_date_status",
+            columnList = "log_date,streaming_status"
+        ),
+        @Index(
+            name = "idx_daily_log_member_content",
+            columnList = "member_id,content_post_id"
+        )
+    }
+)
 public class DailyMemberViewLog {
 
     @Id
