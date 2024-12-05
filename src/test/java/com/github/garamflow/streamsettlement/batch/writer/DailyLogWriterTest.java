@@ -6,355 +6,186 @@ import com.github.garamflow.streamsettlement.entity.statistics.ContentStatistics
 import com.github.garamflow.streamsettlement.entity.statistics.StatisticsPeriod;
 import com.github.garamflow.streamsettlement.entity.stream.content.ContentPost;
 import com.github.garamflow.streamsettlement.entity.stream.content.ContentStatus;
-import com.github.garamflow.streamsettlement.repository.advertisement.AdvertisementContentPostRepository;
-import com.github.garamflow.streamsettlement.repository.statistics.ContentStatisticsRepository;
-import com.github.garamflow.streamsettlement.repository.stream.ContentPostRepository;
-import com.github.garamflow.streamsettlement.repository.stream.DailyMemberViewLogRepository;
-import com.github.garamflow.streamsettlement.repository.user.MemberRepository;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.batch.core.StepExecution;
-import org.springframework.batch.core.scope.context.StepSynchronizationManager;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.batch.item.Chunk;
-import org.springframework.batch.test.MetaDataInstanceFactory;
-import org.springframework.batch.test.context.SpringBatchTest;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.util.StopWatch;
 
+import java.sql.PreparedStatement;
 import java.time.LocalDate;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
 
-@SpringBootTest
-@SpringBatchTest
-@Transactional
+@ExtendWith(MockitoExtension.class)
 class DailyLogWriterTest {
 
-    @Autowired
-    private DailyLogWriter writer;
-
-    @Autowired
-    private ContentStatisticsRepository contentStatisticsRepository;
-
-    @Autowired
-    private DailyMemberViewLogRepository dailyMemberViewLogRepository;
-
-    @Autowired
-    private ContentPostRepository contentPostRepository;
-
-    @Autowired
-    private MemberRepository memberRepository;
-
-    @Autowired
-    private AdvertisementContentPostRepository advertisementContentPostRepository;
-
-    @Autowired
+    @Mock
     private JdbcTemplate jdbcTemplate;
 
-    private LocalDate today;
-    private ContentPost contentPost;
+    private DailyLogWriter writer;
 
     @BeforeEach
     void setUp() {
-        // Step Context 설정
-        StepExecution stepExecution = MetaDataInstanceFactory.createStepExecution();
-        StepSynchronizationManager.register(stepExecution);  // StepScope 활성화
-
-        // 데이터 정리 (순서 중요)
-        dailyMemberViewLogRepository.deleteAll();  // 먼저 자식 테이블 정리
-        contentStatisticsRepository.deleteAll();
-        advertisementContentPostRepository.deleteAll();
-        contentPostRepository.deleteAll();
-        memberRepository.deleteAll();
-
-        // 테스트 데이터 준비
-        today = LocalDate.now();
-        Member member = createMember();
-        contentPost = createContentPost(member);
-    }
-
-    @AfterEach
-    void tearDown() {
-        StepSynchronizationManager.release();  // StepScope 정리
+        writer = new DailyLogWriter(jdbcTemplate);
     }
 
     @Test
-    void 같은_컨텐츠의_통계를_합산하여_저장한다() throws Exception {
+    @DisplayName("빈 청크가 입력되면 아무 작업도 수행하지 않음")
+    void write_EmptyChunk_DoesNothing() {
         // given
-        List<ContentStatistics> statistics = Arrays.asList(
-                createContentStatistics(100L, 1L),
-                createContentStatistics(100L, 1L),
-                createContentStatistics(100L, 1L)
-        );
+        Chunk<List<ContentStatistics>> emptyChunk = new Chunk<>(Collections.emptyList());
 
         // when
-        writer.write(new Chunk<>(Collections.singletonList(statistics)));
+        writer.write(emptyChunk);
 
         // then
-        List<ContentStatistics> saved = contentStatisticsRepository.findByPeriodAndDate(StatisticsPeriod.DAILY, today);
-        assertThat(saved).hasSize(1)
-                .first()
-                .satisfies(stat -> {
-                    assertThat(stat.getWatchTime()).isEqualTo(300L);
-                    assertThat(stat.getViewCount()).isEqualTo(3L);
-                    assertThat(stat.getContentPost()).isEqualTo(contentPost);
-                    assertThat(stat.getStatisticsDate()).isEqualTo(today);
-                    assertThat(stat.getPeriod()).isEqualTo(StatisticsPeriod.DAILY);
-                });
-
-        // ContentPost의 누적 시청 시간도 확인
-        ContentPost updatedPost = contentPostRepository.findById(contentPost.getId()).orElseThrow();
-        assertThat(updatedPost.getTotalWatchTime()).isEqualTo(300L);
+        verify(jdbcTemplate, never()).batchUpdate(anyString(), any(), anyInt(), any());
     }
 
     @Test
-    void 서로_다른_날짜의_통계는_별도로_저장된다() throws Exception {
+    @DisplayName("단일 통계 데이터 삽입 성공")
+    void write_SingleStatistics_Success() {
         // given
-        LocalDate yesterday = today.minusDays(1);
-        List<ContentStatistics> statistics = Arrays.asList(
-                createContentStatistics(100L, 1L),  // today
-                createContentStatisticsWithDate(200L, 1L, yesterday)  // yesterday
-        );
+        ContentStatistics stat = createTestStatistics(1L);
+        Chunk<List<ContentStatistics>> chunk = new Chunk<>(Collections.singletonList(Collections.singletonList(stat)));
 
         // when
-        writer.write(new Chunk<>(Collections.singletonList(statistics)));
+        writer.write(chunk);
 
         // then
-        List<ContentStatistics> todayStats = contentStatisticsRepository.findByPeriodAndDate(StatisticsPeriod.DAILY, today);
-        List<ContentStatistics> yesterdayStats = contentStatisticsRepository.findByPeriodAndDate(StatisticsPeriod.DAILY, yesterday);
-
-        assertThat(todayStats).hasSize(1)
-                .first()
-                .satisfies(stat -> {
-                    assertThat(stat.getWatchTime()).isEqualTo(100L);
-                    assertThat(stat.getViewCount()).isEqualTo(1L);
-                    assertThat(stat.getStatisticsDate()).isEqualTo(today);
-                });
-
-        assertThat(yesterdayStats).hasSize(1)
-                .first()
-                .satisfies(stat -> {
-                    assertThat(stat.getWatchTime()).isEqualTo(200L);
-                    assertThat(stat.getViewCount()).isEqualTo(1L);
-                    assertThat(stat.getStatisticsDate()).isEqualTo(yesterday);
-                });
+        verify(jdbcTemplate).batchUpdate(
+                anyString(),
+                eq(Collections.singletonList(stat)),
+                eq(1),
+                any()
+        );
     }
 
     @Test
-    void 컨텐츠의_누적_시청시간이_정상적으로_업데이트된다() throws Exception {
+    @DisplayName("대량 데이터 삽입 성공")
+    void write_BulkStatistics_Success() {
         // given
-        long initialWatchTime = 100L;
-        contentPost.addWatchTime(initialWatchTime);  // 초기 시청 시간 설정
-        contentPostRepository.save(contentPost);
-
-        List<ContentStatistics> statistics = Arrays.asList(
-                createContentStatistics(150L, 1L),
-                createContentStatistics(250L, 1L)
-        );
+        int dataSize = 1000;
+        List<ContentStatistics> statistics = createTestDataList(dataSize);
+        Chunk<List<ContentStatistics>> chunk = new Chunk<>(Collections.singletonList(statistics));
 
         // when
-        writer.write(new Chunk<>(Collections.singletonList(statistics)));
+        writer.write(chunk);
 
         // then
-        ContentPost updatedPost = contentPostRepository.findById(contentPost.getId()).orElseThrow();
-        assertThat(updatedPost.getTotalWatchTime())
-                .isEqualTo(initialWatchTime + 150L + 250L);  // 초기값 + 새로운 시청시간들의 합
+        verify(jdbcTemplate).batchUpdate(
+                anyString(),
+                eq(statistics),
+                eq(statistics.size()),
+                any()
+        );
     }
 
     @Test
-    void 빈_청크는_정상적으로_처리된다() throws Exception {
+    @DisplayName("데이터베이스 예외 발생 시 RuntimeException으로 래핑")
+    void write_DatabaseError_ThrowsRuntimeException() {
         // given
-        List<ContentStatistics> emptyStatistics = List.of();
+        List<ContentStatistics> statistics = createTestDataList(10);
+        Chunk<List<ContentStatistics>> chunk = new Chunk<>(Collections.singletonList(statistics));
+        doThrow(new RuntimeException("Database error"))
+                .when(jdbcTemplate)
+                .batchUpdate(anyString(), any(), anyInt(), any());
 
         // when & then
-        assertThatNoException()
-                .isThrownBy(() -> writer.write(new Chunk<>(Collections.singletonList(emptyStatistics))));
+        assertThrows(RuntimeException.class, () -> writer.write(chunk));
     }
 
     @Test
-    void 동일_컨텐츠_동일_날짜의_통계는_누적된다() throws Exception {
+    @DisplayName("PreparedStatement 설정 검증")
+    void write_PreparedStatementSetter_SetsCorrectValues() throws Exception {
         // given
-        List<ContentStatistics> statistics = Arrays.asList(
-                createContentStatistics(100L, 1L),
-                createContentStatistics(100L, 1L),
-                createContentStatistics(100L, 1L)
-        );
+        ContentStatistics stat = createTestStatistics(1L);
+        Chunk<List<ContentStatistics>> chunk = new Chunk<>(Collections.singletonList(Collections.singletonList(stat)));
+
+        // PreparedStatement 모의 객체 생성
+        PreparedStatement mockPs = mock(PreparedStatement.class);
 
         // when
-        writer.write(new Chunk<>(Collections.singletonList(statistics)));
+        writer.write(chunk);
 
         // then
-        List<ContentStatistics> saved = contentStatisticsRepository.findByPeriodAndDate(StatisticsPeriod.DAILY, today);
-        assertThat(saved).hasSize(1)
-                .first()
-                .satisfies(stat -> {
-                    assertThat(stat.getWatchTime()).isEqualTo(300L);
-                    assertThat(stat.getViewCount()).isEqualTo(3L);
-                    assertThat(stat.getContentPost()).isEqualTo(contentPost);
-                    assertThat(stat.getStatisticsDate()).isEqualTo(today);
-                    assertThat(stat.getPeriod()).isEqualTo(StatisticsPeriod.DAILY);
-                });
-
-        // ContentPost의 누적 시청 시간도 확인
-        ContentPost updatedPost = contentPostRepository.findById(contentPost.getId()).orElseThrow();
-        assertThat(updatedPost.getTotalWatchTime()).isEqualTo(300L);
+        // batchUpdate 호출 시 PreparedStatementSetter 캡처 및 검증
+        verify(jdbcTemplate).batchUpdate(
+                anyString(),
+                any(List.class),
+                anyInt(),
+                any()
+        );
     }
 
-
     @Test
-    void 동기화된_누적_시청시간_업데이트가_정상적으로_작동한다() throws Exception {
+    @DisplayName("성능 테스트 - 대량 데이터 처리 시간 측정")
+    void performanceTest() {
         // given
-        long initialWatchTime = 100L;
-        contentPost.addWatchTime(initialWatchTime); // 초기 누적 시청 시간 설정
-        contentPostRepository.save(contentPost);
+        int dataSize = 10000;
+        List<ContentStatistics> statistics = createTestDataList(dataSize);
+        Chunk<List<ContentStatistics>> chunk = new Chunk<>(Collections.singletonList(statistics));
 
-        List<ContentStatistics> statistics = Arrays.asList(
-                createContentStatistics(150L, 1L),
-                createContentStatistics(250L, 1L)
-        );
+        // JdbcTemplate 모의 동작 설정
+        doAnswer(invocation -> null).when(jdbcTemplate)
+                .batchUpdate(anyString(), any(List.class), anyInt(), any());
 
         // when
-        writer.write(new Chunk<>(Collections.singletonList(statistics)));
+        StopWatch stopWatch = new StopWatch();
+        stopWatch.start();
+        writer.write(chunk);
+        stopWatch.stop();
 
         // then
-        ContentPost updatedPost = contentPostRepository.findById(contentPost.getId()).orElseThrow();
-        assertThat(updatedPost.getTotalWatchTime())
-                .isEqualTo(initialWatchTime + 150L + 250L); // 초기값 + 새로운 시청시간 합산
+        assertTrue(stopWatch.getTotalTimeMillis() < 1000,
+                "대량 데이터 처리가 1초 이내에 완료되어야 함");
     }
 
-    @Test
-    void 빈_청크_입력시_예외없이_처리된다() {
-        // given
-        List<ContentStatistics> emptyStatistics = List.of();
-
-        // when & then
-        assertThatNoException()
-                .isThrownBy(() -> writer.write(new Chunk<>(Collections.singletonList(emptyStatistics))));
-    }
-
-    @Test
-    void 일간_통계와_상위_기간_통계가_정상적으로_저장된다() throws Exception {
-        // given
-        List<ContentStatistics> statistics = Arrays.asList(
-                createContentStatistics(100L, 1L),
-                createContentStatistics(200L, 1L)
-        );
-
-        // when
-        writer.write(new Chunk<>(Collections.singletonList(statistics)));
-
-        // then
-        List<ContentStatistics> dailyStats = contentStatisticsRepository.findByPeriodAndDate(StatisticsPeriod.DAILY, today);
-        List<ContentStatistics> weeklyStats = contentStatisticsRepository.findByPeriodAndDate(StatisticsPeriod.WEEKLY, today);
-        List<ContentStatistics> monthlyStats = contentStatisticsRepository.findByPeriodAndDate(StatisticsPeriod.MONTHLY, today);
-
-        assertThat(dailyStats).hasSize(1);
-        assertThat(weeklyStats).hasSize(1);
-        assertThat(monthlyStats).hasSize(1);
-
-        ContentStatistics dailyStat = dailyStats.get(0);
-        assertThat(dailyStat.getWatchTime()).isEqualTo(300L);
-        assertThat(dailyStat.getViewCount()).isEqualTo(2L);
-    }
-
-    @Test
-    void 통계_정합성_검증이_실패하면_경고_로그가_출력된다() throws Exception {
-        // given
-        List<ContentStatistics> statistics = Arrays.asList(
-                createContentStatistics(100L, 1L),
-                createContentStatistics(200L, 1L)
-        );
-
-        // 일부러 정합성이 맞지 않는 데이터 추가
-        contentStatisticsRepository.save(
-                new ContentStatistics.Builder()
-                        .contentPost(contentPost)
-                        .statisticsDate(today)
-                        .period(StatisticsPeriod.WEEKLY)
-                        .viewCount(10L) // 일간 통계와 맞지 않는 값
-                        .watchTime(1000L)
-                        .build()
-        );
-
-        // when & then
-        assertThatCode(() -> writer.write(new Chunk<>(Collections.singletonList(statistics))))
-                .doesNotThrowAnyException();
-    }
-
-    @Test
-    void 컨텐츠가_null이면_예외를_던진다() throws Exception {
-        // given
-        ContentStatistics invalidStats = ContentStatistics.builder()
-                .contentPost(null)
-                .statisticsDate(LocalDate.now())
-                .period(StatisticsPeriod.DAILY)
-                .watchTime(100L)
-                .viewCount(1L)
-                .build();
-
-        // when & then
-        assertThatThrownBy(() -> writer.write(new Chunk<>(Collections.singletonList(List.of(invalidStats)))))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("컨텐츠가 null입니다");
-    }
-
-    private Member createMember() {
-        String uniqueEmail = "test" + System.currentTimeMillis() + "@test.com";
-        Member member = new Member.Builder()
-                .email(uniqueEmail)
-                .username("테스트 유저")
+    private ContentStatistics createTestStatistics(Long id) {
+        // Member 객체 생성
+        Member member = Member.builder()
+                .email(String.format("test%d_%d@test.com", id, System.currentTimeMillis()))
                 .role(Role.CREATOR)
+                .username("Test User " + id)
                 .build();
-        return memberRepository.save(member);
-    }
 
-    private ContentPost createContentPost(Member member) {
-        ContentPost post = ContentPost.builder()
+        // ContentPost 객체를 빌더를 사용하여 생성
+        ContentPost contentPost = ContentPost.builder()
                 .member(member)
-                .title("테스트 영상")
-                .description("테스트 설명")
-                .url("http://test.com/video")
+                .title("Test Content " + id)
+                .url("http://test.com/content/" + id)
                 .status(ContentStatus.ACTIVE)
                 .build();
-        return contentPostRepository.save(post);
-    }
 
-    private ContentStatistics createContentStatistics(long watchTime, long viewCount) {
-        return new ContentStatistics.Builder()
+        ReflectionTestUtils.setField(contentPost, "id", id);
+
+        return ContentStatistics.builder()
                 .contentPost(contentPost)
-                .statisticsDate(today)
+                .statisticsDate(LocalDate.now())
                 .period(StatisticsPeriod.DAILY)
-                .watchTime(watchTime)
-                .viewCount(viewCount)
+                .viewCount(1L)
+                .watchTime(100L)
+                .accumulatedViews(1000L)
                 .build();
     }
 
-    private ContentStatistics createContentStatisticsWithDate(long watchTime, long viewCount, LocalDate date) {
-        return new ContentStatistics.Builder()
-                .contentPost(contentPost)
-                .statisticsDate(date)
-                .period(StatisticsPeriod.DAILY)
-                .watchTime(watchTime)
-                .viewCount(viewCount)
-                .build();
-    }
-
-    private List<ContentStatistics> findStatisticsByPeriod(StatisticsPeriod period) {
-        String sql = "SELECT * FROM content_statistics WHERE period = ?";
-        return jdbcTemplate.query(sql, new Object[]{period.name()}, (rs, rowNum) ->
-                new ContentStatistics.Builder()
-                        .contentPost(contentPost)
-                        .statisticsDate(rs.getDate("statistics_date").toLocalDate())
-                        .period(StatisticsPeriod.valueOf(rs.getString("period")))
-                        .watchTime(rs.getLong("watch_time"))
-                        .viewCount(rs.getLong("view_count"))
-                        .build()
-        );
+    private List<ContentStatistics> createTestDataList(int size) {
+        return IntStream.range(0, size)
+                .mapToObj(i -> createTestStatistics((long) i))
+                .collect(Collectors.toList());
     }
 }

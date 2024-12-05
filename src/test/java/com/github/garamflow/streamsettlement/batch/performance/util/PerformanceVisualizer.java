@@ -3,7 +3,8 @@ package com.github.garamflow.streamsettlement.batch.performance.util;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartUtils;
 import org.jfree.chart.JFreeChart;
-import org.jfree.chart.axis.NumberAxis;
+import org.jfree.chart.plot.XYPlot;
+import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
 
@@ -21,19 +22,28 @@ public class PerformanceVisualizer {
             String xAxisLabel,
             String yAxisLabel,
             String outputPath) throws IOException {
-        File outputFile = new File(outputPath);
-        outputFile.getParentFile().mkdirs();
+
+        if (yValuesList == null || yValuesList.isEmpty() || xValues == null || xValues.isEmpty()) {
+            return;
+        }
 
         XYSeriesCollection dataset = new XYSeriesCollection();
 
         for (int seriesIndex = 0; seriesIndex < yValuesList.size(); seriesIndex++) {
-            XYSeries series = new XYSeries(seriesNames.get(seriesIndex));
             List<Double> yValues = yValuesList.get(seriesIndex);
+            if (yValues == null || yValues.isEmpty()) {
+                continue;
+            }
 
-            for (int i = 0; i < xValues.size(); i++) {
+            XYSeries series = new XYSeries(seriesNames.get(seriesIndex));
+            for (int i = 0; i < xValues.size() && i < yValues.size(); i++) {
                 series.add(xValues.get(i), yValues.get(i));
             }
             dataset.addSeries(series);
+        }
+
+        if (dataset.getSeriesCount() == 0) {
+            return;
         }
 
         JFreeChart chart = ChartFactory.createXYLineChart(
@@ -43,16 +53,16 @@ public class PerformanceVisualizer {
                 dataset
         );
 
-        if (yAxisLabel.contains("데드락")) {
-            NumberAxis yAxis = (NumberAxis) chart.getXYPlot().getRangeAxis();
-            yAxis.setStandardTickUnits(NumberAxis.createIntegerTickUnits());
-        }
+        chart.setBackgroundPaint(java.awt.Color.WHITE);
+        chart.getPlot().setBackgroundPaint(new java.awt.Color(240, 240, 240));
 
-        ChartUtils.saveChartAsPNG(
-                outputFile,
-                chart,
-                800,
-                600
-        );
+        XYPlot plot = chart.getXYPlot();
+        XYLineAndShapeRenderer renderer = new XYLineAndShapeRenderer();
+        renderer.setDefaultStroke(new java.awt.BasicStroke(2.0f));
+        plot.setRenderer(renderer);
+
+        File outputFile = new File(outputPath);
+        outputFile.getParentFile().mkdirs();
+        ChartUtils.saveChartAsPNG(outputFile, chart, 800, 600);
     }
 }
