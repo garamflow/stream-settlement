@@ -58,6 +58,28 @@
 | 1차 최적화 | 5분       | 66.7%  |
 | 2차 최적화 | 2분       | 86.7%  |
 
+## 트러블슈팅
+
+### 1. 데드락 이슈
+
+- **문제**: 다중 트랜잭션 처리 시 데드락 발생
+- **해결**: 파티셔닝 도입 및 락 전략 최적화
+- **결과**: 데드락 발생 빈도 100% 감소
+
+### 2. 메모리 누수
+
+- **문제**: 대용량 처리 시 OOM 발생
+- **해결**: 청크 기반 처리 및 페이징 도입
+- **결과**: 메모리 사용량 40% 감소
+
+## 문서
+
+- [시스템 아키텍처](../../wiki/Architecture)
+- [ERD](../../wiki/ERD)
+- [API 문서](../../wiki/API-Documentation)
+- [성능 테스트 결과](../../wiki/Performance-Test-Results)
+- [트러블슈팅](../../wiki/Troubleshooting)
+
 ## 실행 방법
 
 <details>
@@ -90,14 +112,6 @@ docker-compose up -d
 ```
 
 </details>
-
-## 문서
-
-- [시스템 아키텍처](../../wiki/Architecture)
-- [ERD](../../wiki/ERD)
-- [API 문서](../../wiki/API-Documentation)
-- [성능 테스트 결과](../../wiki/Performance-Test-Results)
-- [트러블슈팅](../../wiki/Troubleshooting)
 
 ## 아키텍처
 
