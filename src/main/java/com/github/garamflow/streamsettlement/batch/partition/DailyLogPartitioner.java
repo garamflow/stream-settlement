@@ -36,6 +36,7 @@ public class DailyLogPartitioner implements Partitioner {
                            COUNT(*) as total_count
                     FROM daily_member_view_log
                     WHERE log_date = ?
+                    AND last_viewed_position > 0
                     """;
 
             Map<String, Object> result = jdbcTemplate.queryForMap(sql, targetDate);
