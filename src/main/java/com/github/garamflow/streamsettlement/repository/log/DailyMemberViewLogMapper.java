@@ -1,4 +1,4 @@
-package com.github.garamflow.streamsettlement.batch.reader.mapper;
+package com.github.garamflow.streamsettlement.repository.log;
 
 import com.github.garamflow.streamsettlement.entity.member.Member;
 import com.github.garamflow.streamsettlement.entity.stream.Log.DailyMemberViewLog;
@@ -15,8 +15,7 @@ import java.sql.SQLException;
 
 @Component
 @RequiredArgsConstructor
-public class DailyMemberViewLogRowMapper implements RowMapper<DailyMemberViewLog> {
-
+class DailyMemberViewLogMapper implements RowMapper<DailyMemberViewLog> {
     private final MemberRepository memberRepository;
     private final ContentPostRepository contentPostRepository;
 
@@ -38,4 +37,4 @@ public class DailyMemberViewLogRowMapper implements RowMapper<DailyMemberViewLog
                 .status(StreamingStatus.valueOf(rs.getString("streaming_status")))
                 .build();
     }
-}
+} 

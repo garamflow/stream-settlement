@@ -1,4 +1,4 @@
-package com.github.garamflow.streamsettlement.repository.stream;
+package com.github.garamflow.streamsettlement.repository.log;
 
 import com.github.garamflow.streamsettlement.entity.stream.Log.DailyMemberViewLog;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -9,9 +9,11 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface DailyMemberViewLogRepository extends JpaRepository<DailyMemberViewLog, Long> {
+public interface DailyMemberViewLogRepository extends
+        JpaRepository<DailyMemberViewLog, Long>,
+        DailyMemberViewLogCustomRepository {
 
     Optional<DailyMemberViewLog> findByMemberIdAndContentPostId(Long memberId, Long contentPostId);
 
     List<DailyMemberViewLog> findByLogDate(LocalDate logDate);
-}
+} 
