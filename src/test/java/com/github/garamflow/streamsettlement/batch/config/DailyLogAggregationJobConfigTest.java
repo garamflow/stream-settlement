@@ -11,7 +11,7 @@ import com.github.garamflow.streamsettlement.entity.stream.content.ContentPost;
 import com.github.garamflow.streamsettlement.repository.advertisement.AdvertisementContentPostRepository;
 import com.github.garamflow.streamsettlement.repository.statistics.ContentStatisticsRepository;
 import com.github.garamflow.streamsettlement.repository.stream.ContentPostRepository;
-import com.github.garamflow.streamsettlement.repository.stream.DailyMemberViewLogRepository;
+import com.github.garamflow.streamsettlement.repository.log.DailyMemberViewLogRepository;
 import com.github.garamflow.streamsettlement.repository.user.MemberRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;

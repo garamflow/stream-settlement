@@ -6,7 +6,7 @@ import com.github.garamflow.streamsettlement.entity.stream.Log.StreamingStatus;
 import com.github.garamflow.streamsettlement.entity.stream.content.ContentPost;
 import com.github.garamflow.streamsettlement.entity.member.Member;
 import com.github.garamflow.streamsettlement.repository.stream.ContentPostRepository;
-import com.github.garamflow.streamsettlement.repository.stream.DailyMemberViewLogRepository;
+import com.github.garamflow.streamsettlement.repository.log.DailyMemberViewLogRepository;
 import com.github.garamflow.streamsettlement.repository.user.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
