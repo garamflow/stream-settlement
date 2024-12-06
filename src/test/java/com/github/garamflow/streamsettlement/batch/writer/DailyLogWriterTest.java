@@ -6,6 +6,7 @@ import com.github.garamflow.streamsettlement.entity.statistics.ContentStatistics
 import com.github.garamflow.streamsettlement.entity.statistics.StatisticsPeriod;
 import com.github.garamflow.streamsettlement.entity.stream.content.ContentPost;
 import com.github.garamflow.streamsettlement.entity.stream.content.ContentStatus;
+import com.github.garamflow.streamsettlement.repository.statistics.ContentStatisticsRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,13 +14,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.batch.item.Chunk;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.util.StopWatch;
 
-import java.sql.PreparedStatement;
 import java.time.LocalDate;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -27,25 +27,26 @@ import java.util.stream.IntStream;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class DailyLogWriterTest {
 
     @Mock
-    private JdbcTemplate jdbcTemplate;
+    private ContentStatisticsRepository contentStatisticsRepository;
 
     private DailyLogWriter writer;
 
     @BeforeEach
     void setUp() {
-        writer = new DailyLogWriter(jdbcTemplate);
+        writer = new DailyLogWriter(contentStatisticsRepository);
     }
 
     @Test
-    @DisplayName("빈 청크가 입력되면 아무 작업도 수행하지 않음")
-    void write_EmptyChunk_DoesNothing() {
+    @DisplayName("빈 청크가 입력되면 빈 리스트로 처리")
+    void write_EmptyChunk_ProcessesEmptyList() {
         // given
         Chunk<List<ContentStatistics>> emptyChunk = new Chunk<>(Collections.emptyList());
 
@@ -53,7 +54,7 @@ class DailyLogWriterTest {
         writer.write(emptyChunk);
 
         // then
-        verify(jdbcTemplate, never()).batchUpdate(anyString(), any(), anyInt(), any());
+        verify(contentStatisticsRepository).bulkInsertStatistics(argThat(List::isEmpty));
     }
 
     @Test
@@ -67,12 +68,9 @@ class DailyLogWriterTest {
         writer.write(chunk);
 
         // then
-        verify(jdbcTemplate).batchUpdate(
-                anyString(),
-                eq(Collections.singletonList(stat)),
-                eq(1),
-                any()
-        );
+        verify(contentStatisticsRepository).bulkInsertStatistics(argThat(list ->
+                list.size() == 1 && list.get(0).equals(stat)
+        ));
     }
 
     @Test
@@ -87,12 +85,11 @@ class DailyLogWriterTest {
         writer.write(chunk);
 
         // then
-        verify(jdbcTemplate).batchUpdate(
-                anyString(),
-                eq(statistics),
-                eq(statistics.size()),
-                any()
-        );
+        verify(contentStatisticsRepository).bulkInsertStatistics(argThat(list ->
+                list.size() == dataSize &&
+                        list.stream().sorted(Comparator.comparing(stat -> stat.getContentPost().getId()))
+                                .collect(Collectors.toList()).equals(statistics)
+        ));
     }
 
     @Test
@@ -102,34 +99,11 @@ class DailyLogWriterTest {
         List<ContentStatistics> statistics = createTestDataList(10);
         Chunk<List<ContentStatistics>> chunk = new Chunk<>(Collections.singletonList(statistics));
         doThrow(new RuntimeException("Database error"))
-                .when(jdbcTemplate)
-                .batchUpdate(anyString(), any(), anyInt(), any());
+                .when(contentStatisticsRepository)
+                .bulkInsertStatistics(any());
 
         // when & then
         assertThrows(RuntimeException.class, () -> writer.write(chunk));
-    }
-
-    @Test
-    @DisplayName("PreparedStatement 설정 검증")
-    void write_PreparedStatementSetter_SetsCorrectValues() throws Exception {
-        // given
-        ContentStatistics stat = createTestStatistics(1L);
-        Chunk<List<ContentStatistics>> chunk = new Chunk<>(Collections.singletonList(Collections.singletonList(stat)));
-
-        // PreparedStatement 모의 객체 생성
-        PreparedStatement mockPs = mock(PreparedStatement.class);
-
-        // when
-        writer.write(chunk);
-
-        // then
-        // batchUpdate 호출 시 PreparedStatementSetter 캡처 및 검증
-        verify(jdbcTemplate).batchUpdate(
-                anyString(),
-                any(List.class),
-                anyInt(),
-                any()
-        );
     }
 
     @Test
@@ -139,10 +113,6 @@ class DailyLogWriterTest {
         int dataSize = 10000;
         List<ContentStatistics> statistics = createTestDataList(dataSize);
         Chunk<List<ContentStatistics>> chunk = new Chunk<>(Collections.singletonList(statistics));
-
-        // JdbcTemplate 모의 동작 설정
-        doAnswer(invocation -> null).when(jdbcTemplate)
-                .batchUpdate(anyString(), any(List.class), anyInt(), any());
 
         // when
         StopWatch stopWatch = new StopWatch();

@@ -10,7 +10,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 @Repository
-public interface ContentStatisticsRepository extends JpaRepository<ContentStatistics, Long> {
+public interface ContentStatisticsRepository extends JpaRepository<ContentStatistics, Long>, ContentStatisticsCustomRepository {
+
     List<ContentStatistics> findTop5ByPeriodAndStatisticsDateOrderByViewCountDesc(
             StatisticsPeriod period, LocalDate date, Pageable pageable
     );
