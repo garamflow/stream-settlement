@@ -76,6 +76,7 @@ public class DailyLogReader {
         queryProvider.setWhereClause("""
                 d.log_date = :targetDate
                 AND d.daily_member_view_log_id BETWEEN :minId AND :maxId
+                AND d.last_viewed_position > 0
                 """);
         queryProvider.setSortKeys(Map.of("d.daily_member_view_log_id", Order.ASCENDING));
         return queryProvider;
