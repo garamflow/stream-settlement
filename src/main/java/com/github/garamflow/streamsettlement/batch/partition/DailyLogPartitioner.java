@@ -1,5 +1,6 @@
 package com.github.garamflow.streamsettlement.batch.partition;
 
+import com.github.garamflow.streamsettlement.batch.config.BatchProperties;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,6 +20,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class DailyLogPartitioner implements Partitioner {
     private final JdbcTemplate jdbcTemplate;
+    private final BatchProperties batchProperties;
     private static final Logger log = LoggerFactory.getLogger(DailyLogPartitioner.class);
 
     @Value("#{jobParameters['targetDate']}")
@@ -75,9 +77,11 @@ public class DailyLogPartitioner implements Partitioner {
     }
 
     private int calculateGridSize(long totalCount) {
-        if (totalCount < 100) return 1;
-        if (totalCount < 1000) return 2;
-        if (totalCount < 10000) return 4;
-        return 8;
+        BatchProperties.Partition partition = batchProperties.getPartition();
+
+        if (totalCount < partition.getSmallDataSize()) return partition.getSmallGridSize();
+        if (totalCount < partition.getMediumDataSize()) return partition.getMediumGridSize();
+        if (totalCount < partition.getLargeDataSize()) return partition.getLargeGridSize();
+        return partition.getExtraLargeGridSize();
     }
 }

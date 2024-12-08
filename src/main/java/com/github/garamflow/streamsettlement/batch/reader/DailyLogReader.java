@@ -1,5 +1,6 @@
 package com.github.garamflow.streamsettlement.batch.reader;
 
+import com.github.garamflow.streamsettlement.batch.config.BatchProperties;
 import com.github.garamflow.streamsettlement.entity.stream.Log.DailyMemberViewLog;
 import com.github.garamflow.streamsettlement.repository.log.DailyMemberViewLogRepository;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +21,7 @@ import java.time.format.DateTimeParseException;
 public class DailyLogReader {
 
     private final DailyMemberViewLogRepository dailyMemberViewLogRepository;
-    private static final int CHUNK_SIZE = 1000;
+    private final BatchProperties batchProperties;
 
     @Bean
     @StepScope
@@ -36,7 +37,7 @@ public class DailyLogReader {
         LocalDate targetDate = validateAndParseDate(targetDateStr);
         log.info("Reader initialized for targetDate: {}, minId: {}, maxId: {}", targetDate, minId, maxId);
 
-        return dailyMemberViewLogRepository.createPagingReader(targetDate, minId, maxId, CHUNK_SIZE);
+        return dailyMemberViewLogRepository.createPagingReader(targetDate, minId, maxId, batchProperties.getChunkSize());
     }
 
     private LocalDate validateAndParseDate(String targetDateStr) {
