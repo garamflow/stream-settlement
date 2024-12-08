@@ -15,11 +15,11 @@ import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.item.database.JdbcPagingItemReader;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.retry.backoff.ExponentialBackOffPolicy;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -35,9 +35,7 @@ public class DailyLogAggregationJobConfig {
     private final JobRepository jobRepository;
     private final PlatformTransactionManager transactionManager;
     private final DailyLogPartitioner partitioner;
-
-    @Value("${batch.partition.size:4}")  // 기본값 4
-    private int partitionSize;
+    private final BatchProperties batchProperties;
 
     @Bean
     public Job dailyLogAggregationJob(Step masterStep) {
@@ -52,7 +50,7 @@ public class DailyLogAggregationJobConfig {
         return new StepBuilder("masterStep", jobRepository)
                 .partitioner("workerStep", partitioner)
                 .step(workerStep)
-                .gridSize(partitionSize)
+                .gridSize(batchProperties.getMaxGridSize())
                 .taskExecutor(taskExecutor())
                 .build();
     }
@@ -63,23 +61,26 @@ public class DailyLogAggregationJobConfig {
             DailyLogProcessor dailyLogProcessor,
             DailyLogWriter dailyLogWriter) {
         return new StepBuilder("workerStep", jobRepository)
-                .<DailyMemberViewLog, List<ContentStatistics>>chunk(50, transactionManager)
+                .<DailyMemberViewLog, List<ContentStatistics>>chunk(batchProperties.getChunkSize(), transactionManager)
                 .reader(reader)
                 .processor(dailyLogProcessor)
                 .writer(dailyLogWriter)
                 .faultTolerant()
                 .retryLimit(3)
                 .retry(CannotAcquireLockException.class)
+                .backOffPolicy(new ExponentialBackOffPolicy())
                 .build();
     }
 
     @Bean
     public TaskExecutor taskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(2);
-        executor.setThreadNamePrefix("partition-thread-");
-        executor.setQueueCapacity(25);
+        BatchProperties.Pool pool = batchProperties.getPool();
+
+        executor.setCorePoolSize(pool.getCoreSize());
+        executor.setMaxPoolSize(pool.getMaxSize());
+        executor.setQueueCapacity(pool.getQueueCapacity());
+        executor.setThreadNamePrefix(pool.getThreadNamePrefix());
         executor.initialize();
         return executor;
     }
@@ -93,7 +94,7 @@ public class DailyLogAggregationJobConfig {
                 defaultValidator,
                 parameters -> {
                     // targetDate 파라미터를 문자열로 가져오기
-                    String targetDate = parameters.getString("targetDate");
+                    String targetDate = parameters != null ? parameters.getString("targetDate") : null;
                     if (targetDate == null || targetDate.isEmpty()) {
                         throw new IllegalArgumentException("'targetDate' is required and must not be empty.");
                     }

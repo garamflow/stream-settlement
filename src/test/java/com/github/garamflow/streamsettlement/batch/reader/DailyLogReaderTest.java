@@ -1,5 +1,6 @@
 package com.github.garamflow.streamsettlement.batch.reader;
 
+import com.github.garamflow.streamsettlement.batch.config.BatchProperties;
 import com.github.garamflow.streamsettlement.entity.stream.Log.DailyMemberViewLog;
 import com.github.garamflow.streamsettlement.repository.log.DailyMemberViewLogRepository;
 import org.junit.jupiter.api.Test;
@@ -19,10 +20,11 @@ import static org.mockito.Mockito.*;
 @SpringBatchTest
 class DailyLogReaderTest {
 
-    private static final int CHUNK_SIZE = 1000;
-
     @Autowired
     private DailyLogReader dailyLogReader;
+
+    @Autowired
+    private BatchProperties batchProperties;
 
     @MockBean
     private DailyMemberViewLogRepository viewLogRepository;
@@ -36,7 +38,7 @@ class DailyLogReaderTest {
                 targetDate,
                 1L,
                 3L,
-                CHUNK_SIZE
+                batchProperties.getChunkSize()
         )).thenReturn(mockReader);
 
         // when
@@ -51,7 +53,7 @@ class DailyLogReaderTest {
                 targetDate,
                 1L,
                 3L,
-                CHUNK_SIZE
+                batchProperties.getChunkSize()
         );
         assertThat(reader).isNotNull();
     }

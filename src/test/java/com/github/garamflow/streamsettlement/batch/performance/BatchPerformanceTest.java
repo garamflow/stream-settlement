@@ -1,6 +1,7 @@
 package com.github.garamflow.streamsettlement.batch.performance;
 
 import com.github.garamflow.streamsettlement.batch.TestDataGenerator;
+import com.github.garamflow.streamsettlement.batch.config.BatchProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -36,6 +37,9 @@ class BatchPerformanceTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private BatchProperties batchProperties;
 
     @BeforeEach
     void setUp() {
@@ -90,6 +94,7 @@ class BatchPerformanceTest {
         // When
         JobParameters parameters = new JobParametersBuilder()
                 .addString("targetDate", LocalDate.now().toString())
+                .addString("gridSize", String.valueOf(batchProperties.getMaxGridSize()))
                 .addLong("timestamp", System.currentTimeMillis())
                 .toJobParameters();
 
