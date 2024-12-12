@@ -3,7 +3,6 @@ package com.github.garamflow.streamsettlement.batch.reader;
 import com.github.garamflow.streamsettlement.batch.config.BatchProperties;
 import com.github.garamflow.streamsettlement.entity.stream.Log.MemberContentWatchLog;
 import com.github.garamflow.streamsettlement.entity.stream.Log.StreamingStatus;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.configuration.annotation.StepScope;
@@ -13,7 +12,6 @@ import org.springframework.batch.item.database.Order;
 import org.springframework.batch.item.database.builder.JdbcPagingItemReaderBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
-import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Component;
@@ -97,13 +95,13 @@ public class DailyLogReader implements ItemReader<MemberContentWatchLog> {
         @Override
         public MemberContentWatchLog mapRow(ResultSet rs, int rowNum) throws SQLException {
             return MemberContentWatchLog.customBuilder()
-                .memberId(rs.getLong("member_id"))
-                .contentPostId(rs.getLong("content_post_id"))
-                .lastPlaybackPosition(rs.getLong("last_playback_position"))
-                .totalPlaybackTime(rs.getLong("total_playback_time"))
-                .watchedDate(rs.getDate("watched_date").toLocalDate())
-                .streamingStatus(StreamingStatus.valueOf(rs.getString("streaming_status")))
-                .build();
+                    .memberId(rs.getLong("member_id"))
+                    .contentPostId(rs.getLong("content_post_id"))
+                    .lastPlaybackPosition(rs.getLong("last_playback_position"))
+                    .totalPlaybackTime(rs.getLong("total_playback_time"))
+                    .watchedDate(rs.getDate("watched_date").toLocalDate())
+                    .streamingStatus(StreamingStatus.valueOf(rs.getString("streaming_status")))
+                    .build();
         }
     }
 }

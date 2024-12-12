@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.batch.item.Chunk;
@@ -37,6 +38,7 @@ class DailyLogWriterTest {
     @Mock
     private ContentStatisticsRepository contentStatisticsRepository;
 
+    @InjectMocks
     private DailyLogWriter writer;
 
     @BeforeEach
@@ -46,7 +48,7 @@ class DailyLogWriterTest {
 
     @Test
     @DisplayName("빈 청크가 입력되면 빈 리스트로 처리")
-    void write_EmptyChunk_ProcessesEmptyList() {
+    void write_EmptyChunk_ProcessesEmptyList() throws Exception {
         // given
         Chunk<List<ContentStatistics>> emptyChunk = new Chunk<>(Collections.emptyList());
 
@@ -59,7 +61,7 @@ class DailyLogWriterTest {
 
     @Test
     @DisplayName("단일 통계 데이터 삽입 성공")
-    void write_SingleStatistics_Success() {
+    void write_SingleStatistics_Success() throws Exception {
         // given
         ContentStatistics stat = createTestStatistics(1L);
         Chunk<List<ContentStatistics>> chunk = new Chunk<>(Collections.singletonList(Collections.singletonList(stat)));
@@ -75,9 +77,9 @@ class DailyLogWriterTest {
 
     @Test
     @DisplayName("대량 데이터 삽입 성공")
-    void write_BulkStatistics_Success() {
+    void write_BulkStatistics_Success() throws Exception {
         // given
-        int dataSize = 1000;
+        int dataSize = 1000000;
         List<ContentStatistics> statistics = createTestDataList(dataSize);
         Chunk<List<ContentStatistics>> chunk = new Chunk<>(Collections.singletonList(statistics));
 
@@ -88,7 +90,7 @@ class DailyLogWriterTest {
         verify(contentStatisticsRepository).bulkInsertStatistics(argThat(list ->
                 list.size() == dataSize &&
                         list.stream().sorted(Comparator.comparing(stat -> stat.getContentPost().getId()))
-                                .collect(Collectors.toList()).equals(statistics)
+                                .toList().equals(statistics)
         ));
     }
 
@@ -108,7 +110,7 @@ class DailyLogWriterTest {
 
     @Test
     @DisplayName("성능 테스트 - 대량 데이터 처리 시간 측정")
-    void performanceTest() {
+    void performanceTest() throws Exception {
         // given
         int dataSize = 10000;
         List<ContentStatistics> statistics = createTestDataList(dataSize);
@@ -123,6 +125,92 @@ class DailyLogWriterTest {
         // then
         assertTrue(stopWatch.getTotalTimeMillis() < 1000,
                 "대량 데이터 처리가 1초 이내에 완료되어야 함");
+    }
+
+    @Test
+    @DisplayName("통계 데이터 일괄 저장")
+    void writeStatistics() throws Exception {
+        // given
+        ContentPost contentPost = ContentPost.builder()
+                .title("test title")
+                .url("test url")
+                .totalViews(100L)
+                .build();
+        ReflectionTestUtils.setField(contentPost, "id", 1L);
+
+        List<ContentStatistics> statistics = List.of(
+                ContentStatistics.customBuilder()
+                        .contentPost(contentPost)
+                        .statisticsDate(LocalDate.now())
+                        .period(StatisticsPeriod.DAILY)
+                        .viewCount(1L)
+                        .watchTime(100L)
+                        .accumulatedViews(101L)
+                        .build()
+        );
+
+        Chunk<List<ContentStatistics>> chunk = new Chunk<>(List.of(statistics));
+
+        // when
+        writer.write(chunk);
+
+        // then
+        verify(contentStatisticsRepository).bulkInsertStatistics(statistics);
+    }
+
+    @Test
+    @DisplayName("여러 청크의 통계 데이터 일괄 저장")
+    void writeMultipleStatistics() throws Exception {
+        // given
+        ContentPost contentPost1 = ContentPost.builder()
+                .title("test title 1")
+                .url("test url 1")
+                .totalViews(100L)
+                .build();
+        ReflectionTestUtils.setField(contentPost1, "id", 1L);
+
+        ContentPost contentPost2 = ContentPost.builder()
+                .title("test title 2")
+                .url("test url 2")
+                .totalViews(200L)
+                .build();
+        ReflectionTestUtils.setField(contentPost2, "id", 2L);
+
+        List<ContentStatistics> statistics1 = List.of(
+                ContentStatistics.customBuilder()
+                        .contentPost(contentPost1)
+                        .statisticsDate(LocalDate.now())
+                        .period(StatisticsPeriod.DAILY)
+                        .viewCount(1L)
+                        .watchTime(100L)
+                        .accumulatedViews(101L)
+                        .build()
+        );
+
+        List<ContentStatistics> statistics2 = List.of(
+                ContentStatistics.customBuilder()
+                        .contentPost(contentPost2)
+                        .statisticsDate(LocalDate.now())
+                        .period(StatisticsPeriod.DAILY)
+                        .viewCount(1L)
+                        .watchTime(200L)
+                        .accumulatedViews(201L)
+                        .build()
+        );
+
+        Chunk<List<ContentStatistics>> chunk = new Chunk<>(List.of(statistics1, statistics2));
+
+        // when
+        writer.write(chunk);
+
+        // then
+        verify(contentStatisticsRepository).bulkInsertStatistics(
+                argThat(list ->
+                        list.size() == 2 &&
+                                list.containsAll(statistics1) &&
+                                list.containsAll(statistics2)
+                )
+        );
     }
 
     private ContentStatistics createTestStatistics(Long id) {
@@ -143,7 +231,7 @@ class DailyLogWriterTest {
 
         ReflectionTestUtils.setField(contentPost, "id", id);
 
-        return ContentStatistics.builder()
+        return ContentStatistics.customBuilder()
                 .contentPost(contentPost)
                 .statisticsDate(LocalDate.now())
                 .period(StatisticsPeriod.DAILY)
