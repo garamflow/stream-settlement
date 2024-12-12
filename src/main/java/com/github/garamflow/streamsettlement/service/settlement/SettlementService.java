@@ -1,6 +1,8 @@
 package com.github.garamflow.streamsettlement.service.settlement;
 
 import com.github.garamflow.streamsettlement.entity.settlement.Settlement;
+import com.github.garamflow.streamsettlement.repository.log.DailyWatchedContentRepository;
+import com.github.garamflow.streamsettlement.repository.log.MemberContentWatchLogRepository;
 import com.github.garamflow.streamsettlement.repository.settlement.SettlementRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +21,8 @@ import java.util.List;
 public class SettlementService {
 
     private final SettlementRepository settlementRepository;
+    private final MemberContentWatchLogRepository memberContentWatchLogRepository;
+    private final DailyWatchedContentRepository dailyWatchedContentRepository;
 
     /**
      * 일별 정산 내역을 조회합니다.
@@ -58,17 +62,11 @@ public class SettlementService {
     }
 
 
-    /**
-     * 특정 컨텐츠의 기간별 정산 내역을 조회합니다.
-     *
-     * @param contentId 컨텐츠 ID
-     * @param startDate 조회 시작 날짜
-     * @param endDate 조회 종료 날짜
-     * @return 해당 컨텐츠의 정산 내역 리스트
-     */
     public List<Settlement> getContentSettlement(Long contentId, LocalDate startDate, LocalDate endDate) {
-        validateDateRange(startDate, endDate);
-
+        // MemberContentWatchLog만으로 처리
+//        List<MemberContentWatchLog> watchLogs = memberContentWatchLogRepository
+//            .findByContentPostIdAndWatchedDateBetween(contentPostId, startDate, endDate);
+//
         return settlementRepository.findByContentStatisticsContentPostIdAndSettlementDateBetween(
                 contentId, startDate, endDate);
     }
@@ -77,7 +75,7 @@ public class SettlementService {
      * 날짜 범위의 유효성을 검증합니다.
      *
      * @param startDate 시작 날짜
-     * @param endDate 종료 날짜
+     * @param endDate   종료 날짜
      * @throws IllegalArgumentException 날짜 범위가 유효하지 않은 경우
      */
     private void validateDateRange(LocalDate startDate, LocalDate endDate) {

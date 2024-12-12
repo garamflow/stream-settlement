@@ -1,82 +1,96 @@
 package com.github.garamflow.streamsettlement.controller.stream;
 
+import com.github.garamflow.streamsettlement.controller.dto.stream.ContentPlaybackInfo;
 import com.github.garamflow.streamsettlement.controller.dto.stream.request.StreamingEndRequest;
-import com.github.garamflow.streamsettlement.controller.dto.stream.request.UpdateStreamingPositionRequest;
-import com.github.garamflow.streamsettlement.controller.dto.stream.response.StreamingPositionResponse;
 import com.github.garamflow.streamsettlement.controller.dto.stream.response.StreamingStartResponse;
-import com.github.garamflow.streamsettlement.entity.stream.Log.DailyMemberViewLog;
-import com.github.garamflow.streamsettlement.entity.stream.Log.StreamingStatus;
-import com.github.garamflow.streamsettlement.entity.stream.content.ContentPost;
-import com.github.garamflow.streamsettlement.service.stream.StreamingService;
+import com.github.garamflow.streamsettlement.redis.dto.AbusingKey;
+import com.github.garamflow.streamsettlement.service.cache.DailyStreamingContentCacheService;
+import com.github.garamflow.streamsettlement.service.cache.ViewCountCacheServiceImpl;
+import com.github.garamflow.streamsettlement.service.stream.StreamingServiceImpl;
+import com.github.garamflow.streamsettlement.service.stream.ViewAbusingCacheService;
+import com.github.garamflow.streamsettlement.util.IpUtil;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+@Slf4j
 @RestController
+@RequestMapping("/api/v1/streaming")
 @RequiredArgsConstructor
-@RequestMapping("/api/streaming")
 public class StreamingController {
 
-    private final StreamingService streamingService;
+    private final StreamingServiceImpl streamingServiceImpl;
+    private final DailyStreamingContentCacheService dailyStreamingContentCacheService; // 여기를 수정
+    private final ViewAbusingCacheService viewAbusingCacheService;
+    private final ViewCountCacheServiceImpl viewCountCacheServiceImpl;
 
-    @PostMapping("/start")
+    @GetMapping("/contents/{contentId}")
     public ResponseEntity<StreamingStartResponse> startStreaming(
-            @RequestParam Long contentPostId,
-            @RequestParam Long memberId
+            HttpServletRequest request,
+            @RequestParam @Min(1) Long userId,
+            @PathVariable @Min(1) Long contentId
     ) {
-        DailyMemberViewLog viewLog = streamingService.startPlayback(contentPostId, memberId);
-        ContentPost contentPost = viewLog.getContentPost();
+        log.debug("Start streaming request - userId: {}, contentId: {}", userId, contentId);
 
-        StreamingStartResponse response = StreamingStartResponse.builder()
-                .contentPostId(contentPost.getId())
-                .title(contentPost.getTitle())
-                .videoUrl(contentPost.getUrl())
-                .lastViewedPosition(viewLog.getLastViewedPosition())
-                .totalDuration(contentPost.getDuration())
-                .build();
+        try {
+            ContentPlaybackInfo playbackInfo = streamingServiceImpl.startPlayback(userId, contentId);
 
-        return ResponseEntity.ok(response);
+            AbusingKey abusingKey = new AbusingKey(
+                    userId,
+                    contentId,
+                    playbackInfo.creatorId(),
+                    IpUtil.getClientIp(request)
+            );
+
+            if (!viewAbusingCacheService.isAbusing(abusingKey)) {
+                dailyStreamingContentCacheService.setContentId(contentId);
+                viewCountCacheServiceImpl.incrementViewCount(contentId);
+                viewAbusingCacheService.setAbusing(abusingKey);
+                log.debug("View count processed for content: {}", contentId);
+            }
+
+            StreamingStartResponse response = StreamingStartResponse.builder()
+                    .contentPostId(playbackInfo.contentPostId())
+                    .creatorId(playbackInfo.creatorId())
+                    .title(playbackInfo.title())
+                    .videoUrl(playbackInfo.videoUrl())
+                    .lastViewedPosition(playbackInfo.lastViewedPosition())
+                    .totalDuration(playbackInfo.totalDuration())
+                    .build();
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Streaming start failed - userId: {}, contentId: {}", userId, contentId, e);
+            throw e;
+        }
     }
 
-    @PutMapping("/position")
-    public ResponseEntity<StreamingPositionResponse> updatePosition(
-            @Valid @RequestBody UpdateStreamingPositionRequest request) {
-
-        StreamingStatus status = streamingService.updatePlaybackPosition(
-                request.memberId(),
-                request.contentPostId(),
-                request.positionInSeconds()
-        );
-
-        StreamingPositionResponse response = new StreamingPositionResponse(
-                status,
-                status == StreamingStatus.COMPLETED || status == StreamingStatus.STOPPED,
-                getMessageForStatus(status)
-        );
-
-        return ResponseEntity.ok(response);
-    }
-
-    @PostMapping("/end")
+    @PostMapping("/contents/{contentId}")
     public ResponseEntity<Void> endStreaming(
+            @RequestParam @Min(1) Long userId,
+            @PathVariable @Min(1) Long contentId,
             @Valid @RequestBody StreamingEndRequest request
     ) {
-        streamingService.endPlayback(
-                request.memberId(),
-                request.contentPostId(),
-                request.finalPosition(),
-                request.endType()
-        );
-        return ResponseEntity.ok().build();
-    }
+        log.debug("End streaming request - userId: {}, contentPostId: {}", userId, contentId);
 
-    private String getMessageForStatus(StreamingStatus status) {
-        return switch (status) {
-            case IN_PROGRESS -> "Streaming in progress";
-            case COMPLETED -> "Streaming completed";
-            case STOPPED -> "Streaming stopped";
-            case PAUSED -> "Streaming paused";
-        };
+        try {
+            streamingServiceImpl.endPlayback(
+                    userId,
+                    contentId,
+                    request.finalPosition(),
+                    request.endType()
+            );
+
+            log.info("Streaming ended successfully - userId: {}, contentPostId: {}", userId, contentId);
+            return ResponseEntity.noContent().build();
+
+        } catch (Exception e) {
+            log.error("Streaming end failed - userId: {}, contentPostId: {}", userId, contentId, e);
+            throw e;
+        }
     }
 }

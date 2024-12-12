@@ -1,10 +1,11 @@
 package com.github.garamflow.streamsettlement.batch.config;
 
+import com.github.garamflow.streamsettlement.batch.listener.DailyLogAggregationStepListener;
 import com.github.garamflow.streamsettlement.batch.partition.DailyLogPartitioner;
 import com.github.garamflow.streamsettlement.batch.processor.DailyLogProcessor;
 import com.github.garamflow.streamsettlement.batch.writer.DailyLogWriter;
 import com.github.garamflow.streamsettlement.entity.statistics.ContentStatistics;
-import com.github.garamflow.streamsettlement.entity.stream.Log.DailyMemberViewLog;
+import com.github.garamflow.streamsettlement.entity.stream.Log.MemberContentWatchLog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobParametersValidator;
@@ -17,6 +18,7 @@ import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.item.database.JdbcPagingItemReader;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.retry.backoff.ExponentialBackOffPolicy;
@@ -38,33 +40,37 @@ public class DailyLogAggregationJobConfig {
     private final BatchProperties batchProperties;
 
     @Bean
-    public Job dailyLogAggregationJob(Step masterStep) {
+    public Job dailyLogAggregationJob(Step dailyLogAggregationMasterStep) {
         return new JobBuilder("dailyLogAggregationJob", jobRepository)
-                .validator(validator()) // 추가: Job 파라미터 검증기 설정
-                .start(masterStep)
+                .validator(validator())
+                .start(dailyLogAggregationMasterStep)
                 .build();
     }
 
     @Bean
-    public Step masterStep(Step workerStep) {
+    @Primary
+    public Step dailyLogAggregationMasterStep(Step dailyLogAggregationWorkerStep) {
         return new StepBuilder("masterStep", jobRepository)
                 .partitioner("workerStep", partitioner)
-                .step(workerStep)
+                .step(dailyLogAggregationWorkerStep)
                 .gridSize(batchProperties.getMaxGridSize())
                 .taskExecutor(taskExecutor())
                 .build();
     }
 
     @Bean
-    public Step workerStep(
-            JdbcPagingItemReader<DailyMemberViewLog> reader,
-            DailyLogProcessor dailyLogProcessor,
-            DailyLogWriter dailyLogWriter) {
+    public Step dailyLogAggregationWorkerStep(
+            JdbcPagingItemReader<MemberContentWatchLog> reader,
+            DailyLogProcessor processor,
+            DailyLogWriter writer,
+            DailyLogAggregationStepListener stepListener) {
         return new StepBuilder("workerStep", jobRepository)
-                .<DailyMemberViewLog, List<ContentStatistics>>chunk(batchProperties.getChunkSize(), transactionManager)
+                .<MemberContentWatchLog, List<ContentStatistics>>chunk(
+                        batchProperties.getChunkSize(), transactionManager)
+                .listener(stepListener)
                 .reader(reader)
-                .processor(dailyLogProcessor)
-                .writer(dailyLogWriter)
+                .processor(processor)
+                .writer(writer)
                 .faultTolerant()
                 .retryLimit(3)
                 .retry(CannotAcquireLockException.class)
