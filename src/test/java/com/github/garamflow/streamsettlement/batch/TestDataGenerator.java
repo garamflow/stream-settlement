@@ -1,12 +1,19 @@
 package com.github.garamflow.streamsettlement.batch;
 
+import com.github.garamflow.streamsettlement.entity.member.Member;
+import com.github.garamflow.streamsettlement.entity.member.Role;
+import com.github.garamflow.streamsettlement.entity.stream.content.ContentPost;
+import com.github.garamflow.streamsettlement.repository.stream.ContentPostRepository;
+import com.github.garamflow.streamsettlement.repository.user.MemberRepository;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Slf4j
 @Component
@@ -14,39 +21,40 @@ import org.springframework.transaction.annotation.Transactional;
 public class TestDataGenerator {
 
     private final EntityManager entityManager;
-
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private final JdbcTemplate jdbcTemplate;
+    private final MemberRepository memberRepository;
+    private final ContentPostRepository contentPostRepository;
 
     @Transactional
     public void createTestData(int memberCount, int contentCount, int adCount, int viewLogCount) {
-        initializeDatabase();
-        createProcedure();
-        executeDataGeneration(memberCount, contentCount, adCount, viewLogCount);
+        try {
+            clearAllData();
+            createProcedure();
+            executeDataGeneration(memberCount, contentCount, adCount, viewLogCount);
+            entityManager.flush();  // 명시적 flush 추가
+        } catch (Exception e) {
+            log.error("테스트 데이터 생성 중 오류 발생", e);
+            throw e;  // 예외를 다시 던져서 실패를 명확히 함
+        }
     }
 
     @Transactional
     public void clearAllData() {
-        jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 0");
-        jdbcTemplate.execute("TRUNCATE TABLE daily_member_view_log");
-        // ... 다른 테이블들도 TRUNCATE
-        jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 1");
-    }
-
-    private void initializeDatabase() {
-        // 외래키 제약조건 비활성화
-        entityManager.createNativeQuery("SET FOREIGN_KEY_CHECKS = 0").executeUpdate();
-
-        // 모든 테이블 초기화
-        entityManager.createNativeQuery("TRUNCATE TABLE content_statistics").executeUpdate();
-        entityManager.createNativeQuery("TRUNCATE TABLE daily_member_view_log").executeUpdate();
-        entityManager.createNativeQuery("TRUNCATE TABLE advertisement_content_post").executeUpdate();
-        entityManager.createNativeQuery("TRUNCATE TABLE advertisement").executeUpdate();
-        entityManager.createNativeQuery("TRUNCATE TABLE content_post").executeUpdate();
-        entityManager.createNativeQuery("TRUNCATE TABLE member").executeUpdate();
-
-        // 외래키 제약조건 다시 활성화
-        entityManager.createNativeQuery("SET FOREIGN_KEY_CHECKS = 1").executeUpdate();
+        try {
+            jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 0");
+            jdbcTemplate.execute("TRUNCATE TABLE member_content_watch_log");
+            jdbcTemplate.execute("TRUNCATE TABLE member_ad_watch_log");
+            jdbcTemplate.execute("TRUNCATE TABLE daily_watched_content");
+            jdbcTemplate.execute("TRUNCATE TABLE content_statistics");
+            jdbcTemplate.execute("TRUNCATE TABLE advertisement_content_post");
+            jdbcTemplate.execute("TRUNCATE TABLE advertisement");
+            jdbcTemplate.execute("TRUNCATE TABLE content_post");
+            jdbcTemplate.execute("TRUNCATE TABLE member");
+            jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 1");
+        } catch (Exception e) {
+            log.error("데이터 초기화 중 오류 발생", e);
+            throw e;
+        }
     }
 
     private void createProcedure() {
@@ -69,119 +77,139 @@ public class TestDataGenerator {
 
     private String createProcedureSQL() {
         return """
-                                                CREATE PROCEDURE generate_test_data(
-                    IN p_member_count INT,
-                    IN p_content_count INT,
-                    IN p_ad_count INT,
-                    IN p_view_log_count INT
+                CREATE PROCEDURE generate_test_data(
+                    IN member_count INT,
+                    IN content_count INT,
+                    IN ad_count INT,
+                    IN view_log_count INT
                 )
                 BEGIN
-                    DECLARE viewed_log_count INT;
-                    DECLARE zero_view_count INT;
-                    DECLARE counter INT DEFAULT 1;
+                    DECLARE i INT DEFAULT 1;
+                    DECLARE j INT;
+                    DECLARE content_id INT;
+                    DECLARE ad_id INT;
+                    DECLARE member_id INT;
                 
-                    SET viewed_log_count = CEIL(p_view_log_count * 0.3);
-                    SET zero_view_count = p_view_log_count - viewed_log_count;
-                
-                    -- 멤버 생성 (동일)
-                    INSERT INTO member (role, username, email, created_at)
-                    SELECT 
-                        'MEMBER',
-                        CONCAT('user ', numbers.n),
-                        CONCAT('user', numbers.n, '_', UNIX_TIMESTAMP(), '@test.com'),
-                        NOW()
-                    FROM (
-                        SELECT a.N + b.N * 10 + c.N * 100 + 1 as n
-                        FROM 
-                            (SELECT 0 as N UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) a,
-                            (SELECT 0 as N UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) b,
-                            (SELECT 0 as N UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) c
-                        ORDER BY n
-                        LIMIT p_member_count
-                    ) numbers;
-                
-                    -- 콘텐츠 생성 (동일)
-                    INSERT INTO content_post (
-                        member_id, title, description, status, url, 
-                        duration, total_views, total_watch_time, created_at
-                    )
-                    SELECT 
-                        m.member_id,
-                        CONCAT('Video ', numbers.n),
-                        CONCAT('Description for video ', numbers.n),
-                        'ACTIVE',
-                        CONCAT('https://test.com/video/', numbers.n),
-                        300 + FLOOR(RAND() * 301),
-                        0,
-                        0,
-                        NOW()
-                    FROM (
-                        SELECT a.N + b.N * 10 + c.N * 100 + 1 as n
-                        FROM 
-                            (SELECT 0 as N UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) a,
-                            (SELECT 0 as N UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) b,
-                            (SELECT 0 as N UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) c
-                        ORDER BY n
-                        LIMIT p_content_count
-                    ) numbers
-                    CROSS JOIN (SELECT member_id FROM member ORDER BY RAND() LIMIT 1) m;
-                
-                    -- 광고 생성 (동일)
-                    WHILE counter <= p_ad_count DO
-                        INSERT INTO advertisement (
-                            title, description, price_per_view, total_views, created_at
-                        )
-                        VALUES (
-                            CONCAT('Ad ', counter),
-                            'Test advertisement description',
-                            50 + FLOOR(RAND() * 51),
-                            0,
-                            NOW()
+                    -- member 데이터 생성
+                    SET i = 1;
+                    WHILE i <= member_count DO
+                        INSERT INTO member (
+                            member_id,
+                            email,
+                            username,
+                            role,
+                            created_at,
+                            updated_at,
+                            provider,
+                            provider_id
+                        ) VALUES (
+                            i,
+                            CONCAT('user', i, '@example.com'),
+                            CONCAT('User', i),
+                            'MEMBER',
+                            NOW(),
+                            NOW(),
+                            'LOCAL',
+                            CONCAT('ID', i)
                         );
-                        SET counter = counter + 1;
+                        SET i = i + 1;
                     END WHILE;
                 
-                    -- 실제 조회된 로그 생성 (30%)
-                    INSERT INTO daily_member_view_log (
-                        member_id, content_post_id, last_viewed_position,
-                        last_ad_view_count, log_date, streaming_status, created_at
-                    )
-                    SELECT 
-                        m.member_id,
-                        c.content_post_id,
-                        FLOOR(60 + RAND() * 3540),
-                        FLOOR(1 + RAND() * 11),
-                        CURDATE(),
-                        'COMPLETED',
-                        DATE_ADD(NOW(), INTERVAL - FLOOR(RAND() * 24) HOUR)
-                    FROM 
-                        (SELECT member_id FROM member ORDER BY RAND()) m
-                        CROSS JOIN (SELECT content_post_id FROM content_post ORDER BY RAND()) c
-                    LIMIT viewed_log_count;
+                    -- 컨텐츠 생성
+                    SET i = 1;
+                    WHILE i <= content_count DO
+                        INSERT INTO content_post (
+                            content_post_id,
+                            member_id,
+                            title,
+                            description,
+                            url,
+                            duration,
+                            total_views,
+                            total_watch_time,
+                            created_at,
+                            updated_at,
+                            status,
+                            category
+                        ) VALUES (
+                            i,
+                            1,
+                            CONCAT('Content ', i),
+                            CONCAT('Description ', i),
+                            CONCAT('url', i),
+                            3600,
+                            0,
+                            0,
+                            NOW(),
+                            NOW(),
+                            'ACTIVE',
+                            'VIDEO'
+                        );
+                        SET i = i + 1;
+                    END WHILE;
                 
-                    -- 조회되지 않은 로그 생성 (70%)
-                    INSERT INTO daily_member_view_log (
-                        member_id, content_post_id, last_viewed_position,
-                        last_ad_view_count, log_date, streaming_status, created_at
-                    )
-                    SELECT 
-                        m.member_id,
-                        c.content_post_id,
-                        0,
-                        0,
-                        CURDATE(),
-                        'COMPLETED',
-                        DATE_ADD(NOW(), INTERVAL - FLOOR(RAND() * 24) HOUR)
-                    FROM 
-                        (SELECT member_id FROM member ORDER BY RAND()) m
-                        CROSS JOIN (SELECT content_post_id FROM content_post ORDER BY RAND()) c
-                    WHERE NOT EXISTS (
-                        SELECT 1 FROM daily_member_view_log d 
-                        WHERE d.member_id = m.member_id 
-                        AND d.content_post_id = c.content_post_id
-                    )
-                    LIMIT zero_view_count;
+                    -- 광고 생성
+                    SET i = 1;
+                    WHILE i <= ad_count DO
+                        INSERT INTO advertisement (
+                            advertisement_id,
+                            title,
+                            description,
+                            price_per_view,
+                            total_views,
+                            created_at,
+                            updated_at
+                        ) VALUES (
+                            i,
+                            CONCAT('Ad ', i),
+                            CONCAT('Ad Description ', i),
+                            100,
+                            0,
+                            NOW(),
+                            NOW()
+                        );
+                
+                        -- 광고와 컨텐츠 매핑
+                        INSERT INTO advertisement_content_post (
+                            advertisement_id,
+                            content_post_id
+                        ) VALUES (
+                            i,
+                            1
+                        );
+                        SET i = i + 1;
+                    END WHILE;
                 END
                 """;
+    }
+
+    @Transactional
+    public List<ContentPost> createTestContentPosts(int count) {
+        List<ContentPost> contentPosts = new ArrayList<>();
+
+        // 테스트용 Member 생성 - 이메일을 유니크하게 생성
+        Member member = Member.builder()
+                .email("test" + System.currentTimeMillis() + "@test.com") // 유니크한 이메일
+                .username("testUser")
+                .provider("test")
+                .providerId("testId")
+                .role(Role.CREATOR)
+                .build();
+
+        memberRepository.save(member);
+
+        for (int i = 0; i < count; i++) {
+            ContentPost contentPost = ContentPost.builder()
+                    .member(member)
+                    .title("Test Content " + i)
+                    .url("http://test.com")
+                    .description("Test Description " + i)
+                    .totalViews(0L)
+                    .build();
+
+            contentPosts.add(contentPostRepository.save(contentPost));
+        }
+
+        return contentPosts;
     }
 }

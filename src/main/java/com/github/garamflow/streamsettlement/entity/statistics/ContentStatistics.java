@@ -113,4 +113,23 @@ public class ContentStatistics {
             return new ContentStatistics(this);
         }
     }
+
+    @Override
+    public String toString() {
+        return String.format(
+            "ContentStatistics(id=%d, contentPostId=%d, period=%s, statisticsDate=%s, viewCount=%d, watchTime=%d)",
+            id,
+            contentPost.getId(),
+            period,
+            statisticsDate,
+            viewCount,
+            watchTime
+        );
+    }
+
+    public void addDailyStats(long additionalViews, long additionalWatchTime) {
+        this.viewCount += additionalViews;
+        this.watchTime += additionalWatchTime;
+        this.accumulatedViews = this.contentPost.getTotalViews();
+    }
 }

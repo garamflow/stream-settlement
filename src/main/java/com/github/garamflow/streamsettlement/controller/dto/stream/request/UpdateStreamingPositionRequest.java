@@ -12,6 +12,6 @@ public record UpdateStreamingPositionRequest(
 
         @NotNull(message = "재생 위치는 필수입니다.")
         @Min(value = 0, message = "재생 위치는 0초 이상이어야 합니다.")
-        Integer positionInSeconds
+        Long positionInSeconds
 ) {
 }

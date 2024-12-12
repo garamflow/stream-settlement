@@ -19,9 +19,9 @@ public class BatchProperties {
     @Getter
     @Setter
     public static class Partition {
-        private int smallDataSize = 10000;    // 10000개 미만
-        private int mediumDataSize = 100000;  // 100000개 미만
-        private int largeDataSize = 1000000;  // 1000000개 미만
+        private long smallDataSize = 10000L;    // 10000개 미만
+        private long mediumDataSize = 100000L;  // 100000개 미만
+        private long largeDataSize = 1000000L;  // 1000000개 미만
 
         private int smallGridSize = 1;      // 작은 데이터용 파티션 수
         private int mediumGridSize = 2;     // 중간 데이터용 파티션 수

@@ -3,11 +3,11 @@ package com.github.garamflow.streamsettlement.service.statistics;
 import com.github.garamflow.streamsettlement.controller.dto.stream.response.ContentStatisticsResponse;
 import com.github.garamflow.streamsettlement.entity.statistics.ContentStatistics;
 import com.github.garamflow.streamsettlement.entity.statistics.StatisticsPeriod;
+import com.github.garamflow.streamsettlement.entity.stream.Log.MemberContentWatchLog;
 import com.github.garamflow.streamsettlement.entity.stream.content.ContentPost;
+import com.github.garamflow.streamsettlement.repository.log.MemberContentWatchLogRepository;
 import com.github.garamflow.streamsettlement.repository.statistics.ContentStatisticsRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,11 +24,12 @@ import static java.time.temporal.TemporalAdjusters.previousOrSame;
 public class ContentStatisticsService {
 
     private final ContentStatisticsRepository contentStatisticsRepository;
+    private final MemberContentWatchLogRepository memberContentWatchLogRepository;
+    private final Long fetchSize = 1000L;
 
     public List<ContentStatisticsResponse> getTop5Views(StatisticsPeriod period) {
         LocalDate targetDate = getTargetDate(period);
-        Pageable pageable = PageRequest.of(0, 5);
-        List<ContentStatistics> statistics = contentStatisticsRepository.findTop5ByPeriodAndStatisticsDateOrderByViewCountDesc(period, targetDate, pageable);
+        List<ContentStatistics> statistics = contentStatisticsRepository.findTop5ByViewCount(period, targetDate);
 
         return statistics.stream()
                 .map(ContentStatisticsResponse::from)
@@ -37,9 +38,7 @@ public class ContentStatisticsService {
 
     public List<ContentStatisticsResponse> getTop5WatchTime(StatisticsPeriod period) {
         LocalDate targetDate = getTargetDate(period);
-        Pageable pageable = PageRequest.of(0, 5);
-        List<ContentStatistics> statistics = contentStatisticsRepository
-                .findTop5ByPeriodAndStatisticsDateOrderByWatchTimeDesc(period, targetDate, pageable);
+        List<ContentStatistics> statistics = contentStatisticsRepository.findTop5ByWatchTime(period, targetDate);
 
         return statistics.stream()
                 .map(ContentStatisticsResponse::from)
@@ -56,20 +55,56 @@ public class ContentStatisticsService {
         };
     }
 
-    public List<ContentStatistics> createDailyStatistics(ContentPost contentPost, LocalDate logDate, long watchTime) {
+    public List<ContentStatistics> createDailyStatistics(ContentPost contentPost, LocalDate logDate) {
         validateContentPost(contentPost);
+
         List<ContentStatistics> statistics = new ArrayList<>();
-        for (StatisticsPeriod period : StatisticsPeriod.getAllPeriodsForDaily()) {
-            statistics.add(new ContentStatistics.Builder()
-                    .contentPost(contentPost)
-                    .statisticsDate(getStatisticsDate(logDate, period))
-                    .period(period)
-                    .viewCount(1L)
-                    .watchTime(watchTime)
-                    .accumulatedViews(contentPost.getTotalViews())
-                    .build());
+        Long cursorId = null;
+
+        while (true) {
+            List<MemberContentWatchLog> watchLogs = fetchWatchLogs(contentPost.getId(), logDate, cursorId);
+            if (watchLogs.isEmpty()) break;
+
+            updateStatistics(statistics, watchLogs, contentPost, logDate);
+
+            if (watchLogs.size() < fetchSize) break;
+            cursorId = watchLogs.get(watchLogs.size() - 1).getId();
         }
+
         return statistics;
+    }
+
+    private List<MemberContentWatchLog> fetchWatchLogs(Long contentPostId, LocalDate logDate, Long cursorId) {
+        return memberContentWatchLogRepository.findByContentPostIdAndWatchedDateWithPaging(contentPostId, logDate, cursorId, fetchSize);
+    }
+
+    private void updateStatistics(List<ContentStatistics> statistics, List<MemberContentWatchLog> watchLogs, ContentPost contentPost, LocalDate logDate) {
+        long uniqueViewers = watchLogs.stream()
+                .map(MemberContentWatchLog::getMemberId)
+                .distinct()
+                .count();
+
+        long totalWatchTime = watchLogs.stream()
+                .mapToLong(MemberContentWatchLog::getTotalPlaybackTime)
+                .sum();
+
+        for (StatisticsPeriod period : StatisticsPeriod.getAllPeriodsForDaily()) {
+            LocalDate statisticsDate = getStatisticsDate(logDate, period);
+
+            ContentStatistics stats = contentStatisticsRepository.findByContentPost_IdAndPeriodAndStatisticsDate(
+                            contentPost.getId(), period, statisticsDate)
+                    .orElseGet(() -> new ContentStatistics.Builder()
+                            .contentPost(contentPost)
+                            .statisticsDate(statisticsDate)
+                            .period(period)
+                            .viewCount(0L)
+                            .watchTime(0L)
+                            .accumulatedViews(contentPost.getTotalViews())
+                            .build());
+
+            stats.addDailyStats(uniqueViewers, totalWatchTime);
+            statistics.add(stats);
+        }
     }
 
     private LocalDate getStatisticsDate(LocalDate logDate, StatisticsPeriod period) {
@@ -77,7 +112,7 @@ public class ContentStatisticsService {
             case DAILY -> logDate;
             case WEEKLY -> logDate.with(previousOrSame(DayOfWeek.MONDAY));
             case MONTHLY -> logDate.withDayOfMonth(1);
-            case YEARLY -> logDate.withDayOfYear(1);
+            case YEARLY -> logDate.withMonth(1).withDayOfMonth(1);
         };
     }
 

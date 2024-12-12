@@ -2,25 +2,20 @@ package com.github.garamflow.streamsettlement.repository.statistics;
 
 import com.github.garamflow.streamsettlement.entity.statistics.ContentStatistics;
 import com.github.garamflow.streamsettlement.entity.statistics.StatisticsPeriod;
-import org.springframework.data.domain.Pageable;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
-@Repository
+@Primary
 public interface ContentStatisticsRepository extends JpaRepository<ContentStatistics, Long>, ContentStatisticsCustomRepository {
-
-    List<ContentStatistics> findTop5ByPeriodAndStatisticsDateOrderByViewCountDesc(
-            StatisticsPeriod period, LocalDate date, Pageable pageable
+    Optional<ContentStatistics> findByContentPost_IdAndPeriodAndStatisticsDate(
+            Long contentPostId,
+            StatisticsPeriod period,
+            LocalDate statisticsDate
     );
 
-    List<ContentStatistics> findTop5ByPeriodAndStatisticsDateOrderByWatchTimeDesc(
-            StatisticsPeriod period, LocalDate date, Pageable pageable
-    );
-
-    List<ContentStatistics> findByPeriodAndStatisticsDate(
-            StatisticsPeriod period, LocalDate date
-    );
+    List<ContentStatistics> findByStatisticsDateAndPeriod(LocalDate statisticsDate, StatisticsPeriod period);
 }

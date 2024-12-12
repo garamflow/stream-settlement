@@ -1,6 +1,8 @@
 package com.github.garamflow.streamsettlement.batch.partition;
 
 import com.github.garamflow.streamsettlement.batch.config.BatchProperties;
+import com.github.garamflow.streamsettlement.repository.log.DailyWatchedContentQueryRepository;
+import com.github.garamflow.streamsettlement.service.cache.DailyStreamingContentCacheService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -8,80 +10,98 @@ import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.partition.support.Partitioner;
 import org.springframework.batch.item.ExecutionContext;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 @Component
 @StepScope
 @RequiredArgsConstructor
 public class DailyLogPartitioner implements Partitioner {
-    private final JdbcTemplate jdbcTemplate;
+    private final DailyStreamingContentCacheService dailyStreamingContentCacheService;
+    private final DailyWatchedContentQueryRepository dailyWatchedContentQueryRepository;
     private final BatchProperties batchProperties;
-    private static final Logger log = LoggerFactory.getLogger(DailyLogPartitioner.class);
 
     @Value("#{jobParameters['targetDate']}")
-    private String targetDate;
+    private LocalDate targetDate;
+
+    private static final Logger log = LoggerFactory.getLogger(DailyLogPartitioner.class);
 
     @Override
     @NonNull
     public Map<String, ExecutionContext> partition(int gridSize) {
-        Map<String, ExecutionContext> partitions = new HashMap<>();
+        Set<Long> contentIds = dailyStreamingContentCacheService.getContentIdsByDate(targetDate);
 
-        try {
-            String sql = """
-                    SELECT COALESCE(MIN(daily_member_view_log_id), 0) as min_id,
-                           COALESCE(MAX(daily_member_view_log_id), 0) as max_id,
-                           COUNT(*) as total_count
-                    FROM daily_member_view_log
-                    WHERE log_date = ?
-                    AND last_viewed_position > 0
-                    """;
+        if (contentIds.isEmpty()) {
+            Long minId = dailyWatchedContentQueryRepository.findMinIdByWatchedDate(targetDate);
+            Long maxId = dailyWatchedContentQueryRepository.findMaxIdByWatchedDate(targetDate);
 
-            Map<String, Object> result = jdbcTemplate.queryForMap(sql, targetDate);
-            long minId = ((Number) result.get("min_id")).longValue();
-            long maxId = ((Number) result.get("max_id")).longValue();
-            long totalCount = ((Number) result.get("total_count")).longValue();
-
-            int actualGridSize = calculateGridSize(totalCount);
-            long targetSize = (maxId - minId + actualGridSize) / actualGridSize;
-
-            for (int i = 0; i < actualGridSize; i++) {
-                ExecutionContext context = new ExecutionContext();
-                long start = minId + (i * targetSize);
-                long end = i == actualGridSize - 1 ? maxId : start + targetSize - 1;
-
-                if (start > end) continue;
-
-                context.putLong("minId", start);
-                context.putLong("maxId", end);
-                context.putString("targetDate", targetDate);
-                context.putString("partitionId", String.valueOf(i));
-
-                partitions.put("partition" + i, context);
-                log.info("Created partition{}: minId={}, maxId={}", i, start, end);
+            if (minId == null || maxId == null) {
+                log.warn("No streamed content found for date: {}", targetDate);
+                return createEmptyPartition();
             }
-        } catch (Exception e) {
-            log.warn("Error during partitioning for date: {}", targetDate, e);
+
+            int adjustedGridSize = determineGridSize((int) (maxId - minId + 1));
+            long partitionSize = (maxId - minId) / adjustedGridSize + 1;
+            return createPartitions(minId, maxId, partitionSize);
+        }
+
+        Long minId = Collections.min(contentIds);
+        Long maxId = Collections.max(contentIds);
+        int adjustedGridSize = determineGridSize(contentIds.size());
+        long partitionSize = (maxId - minId) / adjustedGridSize + 1;
+
+        return createPartitions(minId, maxId, partitionSize);
+    }
+
+    private int determineGridSize(int dataSize) {
+        BatchProperties.Partition partition = batchProperties.getPartition();
+        if (dataSize < partition.getSmallDataSize()) {
+            return partition.getSmallGridSize();
+        } else if (dataSize < partition.getMediumDataSize()) {
+            return partition.getMediumGridSize();
+        } else if (dataSize < partition.getLargeDataSize()) {
+            return partition.getLargeGridSize();
+        }
+        return partition.getExtraLargeGridSize();
+    }
+
+    private Map<String, ExecutionContext> createPartitions(long minId, long maxId, long partitionSize) {
+        Map<String, ExecutionContext> partitions = new HashMap<>();
+        int partitionNumber = 1;
+        long currentPartitionStartId = minId;
+        long currentPartitionEndId = currentPartitionStartId + partitionSize - 1;
+
+        while (currentPartitionStartId <= maxId) {
+            currentPartitionEndId = Math.min(currentPartitionEndId, maxId);
+
             ExecutionContext context = new ExecutionContext();
-            context.putLong("minId", 0L);
-            context.putLong("maxId", 0L);
-            context.putString("targetDate", targetDate);
-            partitions.put("partition0", context);
+            context.putLong("startContentId", currentPartitionStartId);
+            context.putLong("endContentId", currentPartitionEndId);
+
+            partitions.put(String.format("partition%d", partitionNumber), context);
+            log.info("Created partition{}: startContentId={}, endContentId={}",
+                    partitionNumber, currentPartitionStartId, currentPartitionEndId);
+
+            currentPartitionStartId += partitionSize;
+            currentPartitionEndId += partitionSize;
+            partitionNumber++;
         }
 
         return partitions;
     }
 
-    private int calculateGridSize(long totalCount) {
-        BatchProperties.Partition partition = batchProperties.getPartition();
-
-        if (totalCount < partition.getSmallDataSize()) return partition.getSmallGridSize();
-        if (totalCount < partition.getMediumDataSize()) return partition.getMediumGridSize();
-        if (totalCount < partition.getLargeDataSize()) return partition.getLargeGridSize();
-        return partition.getExtraLargeGridSize();
+    private Map<String, ExecutionContext> createEmptyPartition() {
+        Map<String, ExecutionContext> partitions = new HashMap<>();
+        ExecutionContext context = new ExecutionContext();
+        context.putLong("startContentId", 0L);
+        context.putLong("endContentId", 0L);
+        partitions.put("partition0", context);
+        return partitions;
     }
 }
