@@ -1,72 +1,72 @@
 package com.github.garamflow.streamsettlement.batch.reader;
 
 import com.github.garamflow.streamsettlement.batch.config.BatchProperties;
-import com.github.garamflow.streamsettlement.entity.stream.Log.DailyMemberViewLog;
-import com.github.garamflow.streamsettlement.repository.log.DailyMemberViewLogRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.batch.item.database.JdbcPagingItemReader;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.batch.test.context.SpringBatchTest;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.jdbc.core.JdbcTemplate;
 
+import javax.sql.DataSource;
 import java.time.LocalDate;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.lenient;
 
 @SpringBootTest
 @SpringBatchTest
+@ExtendWith(MockitoExtension.class)
 class DailyLogReaderTest {
 
-    @Autowired
-    private DailyLogReader dailyLogReader;
+    @Mock
+    private JdbcTemplate jdbcTemplate;
 
-    @Autowired
+    @Mock
     private BatchProperties batchProperties;
 
-    @MockBean
-    private DailyMemberViewLogRepository viewLogRepository;
+    @Mock
+    private DataSource dataSource;
 
-    @Test
-    void 특정_날짜의_로그를_정상적으로_읽어온다() throws Exception {
-        // given
-        LocalDate targetDate = LocalDate.now();
-        JdbcPagingItemReader<DailyMemberViewLog> mockReader = mock(JdbcPagingItemReader.class.asSubclass(JdbcPagingItemReader.class));
-        when(viewLogRepository.createPagingReader(
-                targetDate,
-                1L,
-                3L,
-                batchProperties.getChunkSize()
-        )).thenReturn(mockReader);
+    @InjectMocks
+    private DailyLogReader reader;
 
-        // when
-        JdbcPagingItemReader<DailyMemberViewLog> reader = dailyLogReader.reader(
-                targetDate.toString(),
-                1L,
-                3L
-        );
+    private final LocalDate targetDate = LocalDate.of(2024, 1, 1);
 
-        // then
-        verify(viewLogRepository).createPagingReader(
-                targetDate,
-                1L,
-                3L,
-                batchProperties.getChunkSize()
-        );
-        assertThat(reader).isNotNull();
+    @BeforeEach
+    void setUp() {
+        lenient().when(jdbcTemplate.getDataSource()).thenReturn(dataSource);
+        lenient().when(batchProperties.getChunkSize()).thenReturn(1000);
     }
 
     @Test
-    void 잘못된_날짜_형식이면_예외를_던진다() {
-        // given
-        String invalidDate = "2024-13-45";
-
-        // when & then
+    @DisplayName("createDelegate() - ContentId가 null일 때 예외 발생")
+    void createDelegateFail_NullContentId() {
         assertThatThrownBy(() ->
-                dailyLogReader.reader(invalidDate, 1L, 3L)
-        ).isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Invalid 'targetDate' format");
+                reader.createDelegate(targetDate.toString(), null, 10L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("StepExecutionContext missing 'startContentId' or 'endContentId'.");
+    }
+
+    @Test
+    @DisplayName("createDelegate() - 잘못된 날짜 형식일 때 예외 발생")
+    void createDelegateFail_InvalidDateFormat() {
+        assertThatThrownBy(() ->
+                reader.createDelegate("invalid-date", 1L, 10L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid 'targetDate' format. Expected format is yyyy-MM-dd.");
+    }
+
+    @Test
+    @DisplayName("createDelegate() - 날짜가 null일 때 예외 발생")
+    void createDelegateFail_NullDate() {
+        assertThatThrownBy(() ->
+                reader.createDelegate(null, 1L, 10L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Job parameter 'targetDate' is required but not provided.");
     }
 }

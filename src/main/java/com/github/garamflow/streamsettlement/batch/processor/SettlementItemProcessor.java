@@ -26,16 +26,16 @@ public class SettlementItemProcessor implements ItemProcessor<StatisticsAndSettl
 
     @Override
     public Settlement process(StatisticsAndSettlementDto item) throws Exception {
-        ContentStatistics statistics = item.getStatistics();
-        PreviousSettlementDto previousSettlement = item.getPreviousSettlement();
+        ContentStatistics statistics = item.statistics();
+        PreviousSettlementDto previousSettlement = item.previousSettlement();
 
         // 누적 정산 계산
         long totalContentRevenue = ContentRevenueRange.calculateRevenueByViews(statistics.getAccumulatedViews());
         long totalAdRevenue = AdRevenueRange.calculateRevenueByViews(statistics.getWatchTime());
 
         // 일일 정산 계산
-        long dailyContentRevenue = totalContentRevenue - previousSettlement.getPreviousTotalContentRevenue();
-        long dailyAdRevenue = totalAdRevenue - previousSettlement.getPreviousTotalAdRevenue();
+        long dailyContentRevenue = totalContentRevenue - previousSettlement.previousTotalContentRevenue();
+        long dailyAdRevenue = totalAdRevenue - previousSettlement.previousTotalAdRevenue();
 
         return Settlement.customBuilder()
                 .contentPostId(statistics.getContentPost().getId())

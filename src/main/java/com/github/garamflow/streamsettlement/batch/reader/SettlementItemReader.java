@@ -86,7 +86,7 @@ public class SettlementItemReader implements ItemReader<StatisticsAndSettlementD
 
         Map<Long, PreviousSettlementDto> settlementMap = previousSettlements.stream()
                 .collect(Collectors.toMap(
-                        PreviousSettlementDto::getContentPostId,
+                        PreviousSettlementDto::contentPostId,
                         dto -> dto,
                         (existing, replacement) -> existing // 중복 시 기존 값 유지
                 ));
