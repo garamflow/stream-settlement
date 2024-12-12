@@ -85,11 +85,7 @@ public class TestDataGenerator {
                 )
                 BEGIN
                     DECLARE i INT DEFAULT 1;
-                    DECLARE j INT;
-                    DECLARE content_id INT;
-                    DECLARE ad_id INT;
-                    DECLARE member_id INT;
-                
+                    
                     -- member 데이터 생성
                     SET i = 1;
                     WHILE i <= member_count DO
@@ -115,7 +111,7 @@ public class TestDataGenerator {
                         SET i = i + 1;
                     END WHILE;
                 
-                    -- 컨텐츠 생성
+                    -- content_post 데이터 생성
                     SET i = 1;
                     WHILE i <= content_count DO
                         INSERT INTO content_post (
@@ -129,8 +125,7 @@ public class TestDataGenerator {
                             total_watch_time,
                             created_at,
                             updated_at,
-                            status,
-                            category
+                            status
                         ) VALUES (
                             i,
                             1,
@@ -142,13 +137,12 @@ public class TestDataGenerator {
                             0,
                             NOW(),
                             NOW(),
-                            'ACTIVE',
-                            'VIDEO'
+                            'ACTIVE'
                         );
                         SET i = i + 1;
                     END WHILE;
                 
-                    -- 광고 생성
+                    -- advertisement 데이터 생성
                     SET i = 1;
                     WHILE i <= ad_count DO
                         INSERT INTO advertisement (
@@ -169,13 +163,53 @@ public class TestDataGenerator {
                             NOW()
                         );
                 
-                        -- 광고와 컨텐츠 매핑
+                        -- advertisement_content_post 매핑
                         INSERT INTO advertisement_content_post (
                             advertisement_id,
                             content_post_id
                         ) VALUES (
                             i,
                             1
+                        );
+                        SET i = i + 1;
+                    END WHILE;
+                
+                    -- daily_watched_content 데이터 생성 (콘텐츠별로 한 번만)
+                    SET i = 1;
+                    WHILE i <= content_count DO
+                        INSERT INTO daily_watched_content (
+                            content_post_id,
+                            watched_date,
+                            created_at
+                        ) VALUES (
+                            i,
+                            DATE_SUB(CURDATE(), INTERVAL 1 DAY),
+                            NOW()
+                        );
+                        SET i = i + 1;
+                    END WHILE;
+                
+                    -- member_content_watch_log 생성
+                    SET i = 1;
+                    WHILE i <= view_log_count DO
+                        INSERT INTO member_content_watch_log (
+                            member_id,
+                            content_post_id,
+                            watched_date,
+                            total_playback_time,
+                            last_playback_position,
+                            streaming_status,
+                            created_at,
+                            updated_at
+                        ) VALUES (
+                            (i % member_count) + 1,
+                            ((i - 1) % content_count) + 1,
+                            DATE_SUB(CURDATE(), INTERVAL 1 DAY),
+                            250,
+                            300,
+                            'COMPLETED',
+                            NOW(),
+                            NOW()
                         );
                         SET i = i + 1;
                     END WHILE;

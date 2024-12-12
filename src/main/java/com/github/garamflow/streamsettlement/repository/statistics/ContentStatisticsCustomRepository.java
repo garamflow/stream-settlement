@@ -14,4 +14,14 @@ public interface ContentStatisticsCustomRepository {
     List<ContentStatistics> findTop5ByViewCount(StatisticsPeriod period, LocalDate date);
 
     List<ContentStatistics> findTop5ByWatchTime(StatisticsPeriod period, LocalDate date);
+
+    long findMinIdByStatisticsDate(LocalDate date);
+
+    long findMaxIdByStatisticsDate(LocalDate date);
+
+    List<ContentStatistics> findByIdBetweenAndStatisticsDate(Long startId, Long endId, LocalDate date);
+
+    List<ContentStatistics> findByContentPostIdAndStatisticsDateBetween(Long contentPostId, LocalDate startDate, LocalDate endDate);
+
+    List<ContentStatistics> findAllByStatisticsDateAndPeriodWithFetch(LocalDate statisticsDate, StatisticsPeriod period);
 } 

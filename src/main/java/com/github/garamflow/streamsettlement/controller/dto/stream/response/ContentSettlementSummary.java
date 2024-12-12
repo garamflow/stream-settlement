@@ -20,21 +20,18 @@ public record ContentSettlementSummary(
         long totalAmount,             // 총 정산금액
         SettlementStatus status       // 정산 상태
 ) {
-    public static ContentSettlementSummary from(Settlement settlement) {
-        ContentStatistics statistics = settlement.getContentStatistics();
-        ContentPost contentPost = statistics.getContentPost();
-
+    public static ContentSettlementSummary from(Settlement settlement, ContentStatistics statistics) {
         return new ContentSettlementSummary(
-                contentPost.getId(),
-                contentPost.getTitle(),
+                settlement.getContentPostId(),
+                statistics.getContentPost().getTitle(),
                 settlement.getSettlementDate(),
-                settlement.getDailyViews(),
-                settlement.getTotalViews(),
+                statistics.getViewCount(),
+                statistics.getAccumulatedViews(),
                 statistics.getWatchTime(),
-                settlement.getContentAmount(),
-                settlement.getAdAmount(),
-                settlement.getTotalAmount(),
-                settlement.getStatus()
+                settlement.getContentRevenue(),
+                settlement.getAdRevenue(),
+                settlement.getContentRevenue() + settlement.getAdRevenue(),
+                SettlementStatus.CALCULATED
         );
     }
 }

@@ -55,7 +55,6 @@ public class DailyStreamingContentCacheService {
         LocalDate today = LocalDate.now();
         try {
             setContentIdWithDate(contentId, today);
-            log.debug("Set content ID {} for date {}", contentId, today);
         } catch (Exception e) {
             log.error("Failed to set content ID {} for date {}", contentId, today, e);
             throw new CacheOperationException("Failed to set content ID", e);
@@ -97,8 +96,6 @@ public class DailyStreamingContentCacheService {
                 LocalDateTime expiryTime = date.plusDays(1).atTime(4, 0);
                 Duration timeUntilExpiry = Duration.between(LocalDateTime.now(), expiryTime);
                 redisTemplate.expire(key, timeUntilExpiry.toSeconds(), TimeUnit.SECONDS);
-
-                log.debug("Set content {} with expiry at {}", contentId, expiryTime);
             } finally {
                 lock.unlock();
             }

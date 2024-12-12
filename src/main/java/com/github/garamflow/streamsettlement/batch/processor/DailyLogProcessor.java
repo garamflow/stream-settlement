@@ -15,7 +15,9 @@ import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 
 @Slf4j
@@ -29,6 +31,8 @@ public class DailyLogProcessor implements ItemProcessor<MemberContentWatchLog, L
     @Value("#{jobParameters['targetDate']}")
     private LocalDate targetDate;
 
+    private Map<Long, ContentStatistics> statisticsMap = new HashMap<>();
+
     @Override
     public List<ContentStatistics> process(@NonNull MemberContentWatchLog watchLog) {
         if (!isValid(watchLog)) {
@@ -39,14 +43,22 @@ public class DailyLogProcessor implements ItemProcessor<MemberContentWatchLog, L
         ContentPost contentPost = contentPostRepository.findById(watchLog.getContentPostId())
                 .orElseThrow(() -> new NoSuchElementException("ContentPost not found"));
 
-        return List.of(ContentStatistics.builder()
-                .contentPost(contentPost)
-                .statisticsDate(targetDate)
-                .period(StatisticsPeriod.DAILY)
-                .viewCount(1L)
-                .watchTime(watchLog.getTotalPlaybackTime())
-                .accumulatedViews(contentPost.getTotalViews())
-                .build());
+        ContentStatistics statistics = statisticsMap.computeIfAbsent(
+                contentPost.getId(),
+                id -> ContentStatistics.customBuilder()
+                        .contentPost(contentPost)
+                        .statisticsDate(targetDate)
+                        .period(StatisticsPeriod.DAILY)
+                        .viewCount(0L)
+                        .watchTime(0L)
+                        .accumulatedViews(contentPost.getTotalViews())
+                        .build()
+        );
+
+        statistics.incrementViewCount();
+        statistics.addWatchTime(watchLog.getTotalPlaybackTime());
+
+        return List.of(statistics);
     }
 
     private boolean isValid(MemberContentWatchLog watchLog) {
