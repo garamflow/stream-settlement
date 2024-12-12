@@ -26,10 +26,8 @@ public class ViewCountSyncScheduler {
     @Transactional
     public void syncContentViewCountsToDatabase() {
         String timeWindowKey = viewCountCacheService.generatePreviousMinuteViewCountKey();
-        log.info("Fetching view counts for key: {}", timeWindowKey);
-        
+
         Map<Long, Long> viewCounts = viewCountCacheService.fetchPreviousMinuteViewCounts(timeWindowKey);
-        log.info("Found view counts: {}", viewCounts);
 
         if (!viewCounts.isEmpty()) {
             try {

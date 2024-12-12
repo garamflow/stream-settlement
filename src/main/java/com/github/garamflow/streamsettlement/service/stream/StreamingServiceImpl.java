@@ -38,7 +38,6 @@ public class StreamingServiceImpl implements StreamingService {
                 .orElseThrow(() -> new IllegalArgumentException("Content not found"));
 
         if (contentPost.getMember() == null) {
-            log.error("Content {} has no associated member", contentId);
             throw new IllegalStateException("Content creator not found");
         }
 

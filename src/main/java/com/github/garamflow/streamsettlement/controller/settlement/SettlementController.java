@@ -2,7 +2,9 @@ package com.github.garamflow.streamsettlement.controller.settlement;
 
 import com.github.garamflow.streamsettlement.controller.dto.stream.response.SettlementSummaryResponse;
 import com.github.garamflow.streamsettlement.entity.settlement.Settlement;
+import com.github.garamflow.streamsettlement.entity.statistics.ContentStatistics;
 import com.github.garamflow.streamsettlement.service.settlement.SettlementService;
+import com.github.garamflow.streamsettlement.service.statistics.ContentStatisticsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +21,7 @@ public class SettlementController {
 
 
     private final SettlementService settlementService;
+    private final ContentStatisticsService contentStatisticsService;
 
     @GetMapping("/daily")
     public ResponseEntity<SettlementSummaryResponse> getDailySettlement(
@@ -26,7 +29,8 @@ public class SettlementController {
     ) {
 
         List<Settlement> settlements = settlementService.getDailySettlementSummary(date);
-        return ResponseEntity.ok(SettlementSummaryResponse.from(settlements));
+        List<ContentStatistics> statistics = contentStatisticsService.getDailyStatistics(date);
+        return ResponseEntity.ok(SettlementSummaryResponse.from(settlements, statistics));
     }
 
     @GetMapping("/weekly")
@@ -34,7 +38,8 @@ public class SettlementController {
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate
     ) {
         List<Settlement> settlements = settlementService.getWeeklySettlementSummary(startDate);
-        return ResponseEntity.ok(SettlementSummaryResponse.from(settlements));
+        List<ContentStatistics> statistics = contentStatisticsService.getWeeklyStatistics(startDate);
+        return ResponseEntity.ok(SettlementSummaryResponse.from(settlements, statistics));
     }
 
     @GetMapping("/monthly")
@@ -42,7 +47,8 @@ public class SettlementController {
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM") LocalDate yearMonth
     ) {
         List<Settlement> settlements = settlementService.getMonthlySettlement(yearMonth);
-        return ResponseEntity.ok(SettlementSummaryResponse.from(settlements));
+        List<ContentStatistics> statistics = contentStatisticsService.getMonthlyStatistics(yearMonth);
+        return ResponseEntity.ok(SettlementSummaryResponse.from(settlements, statistics));
     }
 
     @GetMapping("/contents/{contentPostId}")
@@ -52,6 +58,7 @@ public class SettlementController {
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate
     ) {
         List<Settlement> settlements = settlementService.getContentSettlement(contentPostId, startDate, endDate);
-        return ResponseEntity.ok(SettlementSummaryResponse.from(settlements));
+        List<ContentStatistics> statistics = contentStatisticsService.getContentStatistics(contentPostId, startDate, endDate);
+        return ResponseEntity.ok(SettlementSummaryResponse.from(settlements, statistics));
     }
 }

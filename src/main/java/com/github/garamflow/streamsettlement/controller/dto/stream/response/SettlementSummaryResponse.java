@@ -1,36 +1,27 @@
 package com.github.garamflow.streamsettlement.controller.dto.stream.response;
 
 import com.github.garamflow.streamsettlement.entity.settlement.Settlement;
+import com.github.garamflow.streamsettlement.entity.statistics.ContentStatistics;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
-public record SettlementSummaryResponse(
-        long totalSettlementAmount,          // 전체 정산 금액 합계
-        long totalContentAmount,             // 전체 컨텐츠 정산 금액 합계
-        long totalAdvertisementAmount,       // 전체 광고 정산 금액 합계
-        List<ContentSettlementSummary> contentSettlements  // 컨텐츠별 정산 내역
+public record SettlementSummaryResponse(long totalSettlementAmount,          // 전체 정산 금액 합계
+                                        long totalContentAmount,             // 전체 컨텐츠 정산 금액 합계
+                                        long totalAdvertisementAmount,       // 전체 광고 정산 금액 합계
+                                        List<ContentSettlementSummary> contentSettlements  // 컨텐츠별 정산 내역
 ) {
-    public static SettlementSummaryResponse from(List<Settlement> settlements) {
-        // 컨텐츠별 정산 내역 생성
-        List<ContentSettlementSummary> contentSettlements = settlements.stream()
-                .map(ContentSettlementSummary::from)
-                .toList();
+    public static SettlementSummaryResponse from(List<Settlement> settlements, List<ContentStatistics> statistics) {
+        Map<Long, ContentStatistics> statsMap = statistics.stream().collect(Collectors.toMap(stats -> stats.getContentPost().getId(), stats -> stats));
 
-        // 총 금액 계산
-        long totalContentAmount = settlements.stream()
-                .mapToLong(Settlement::getContentAmount)
-                .sum();
+        List<ContentSettlementSummary> contentSettlements = settlements.stream().map(settlement -> ContentSettlementSummary.from(settlement, statsMap.get(settlement.getContentPostId()))).toList();
 
-        long totalAdAmount = settlements.stream()
-                .mapToLong(Settlement::getAdAmount)
-                .sum();
+        long totalContentAmount = settlements.stream().mapToLong(Settlement::getContentRevenue).sum();
 
-        return new SettlementSummaryResponse(
-                totalContentAmount + totalAdAmount,
-                totalContentAmount,
-                totalAdAmount,
-                contentSettlements
-        );
+        long totalAdAmount = settlements.stream().mapToLong(Settlement::getAdRevenue).sum();
+
+        return new SettlementSummaryResponse(totalContentAmount + totalAdAmount, totalContentAmount, totalAdAmount, contentSettlements);
     }
 }
 

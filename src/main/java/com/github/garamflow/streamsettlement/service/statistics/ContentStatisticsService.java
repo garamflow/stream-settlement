@@ -93,7 +93,7 @@ public class ContentStatisticsService {
 
             ContentStatistics stats = contentStatisticsRepository.findByContentPost_IdAndPeriodAndStatisticsDate(
                             contentPost.getId(), period, statisticsDate)
-                    .orElseGet(() -> new ContentStatistics.Builder()
+                    .orElseGet(() -> ContentStatistics.customBuilder()
                             .contentPost(contentPost)
                             .statisticsDate(statisticsDate)
                             .period(period)
@@ -120,5 +120,22 @@ public class ContentStatisticsService {
         if (contentPost == null) {
             throw new IllegalArgumentException("ContentPost must not be null");
         }
+    }
+
+    public List<ContentStatistics> getDailyStatistics(LocalDate date) {
+        return contentStatisticsRepository.findByStatisticsDateAndPeriod(date, StatisticsPeriod.DAILY);
+    }
+
+    public List<ContentStatistics> getWeeklyStatistics(LocalDate startDate) {
+        return contentStatisticsRepository.findByStatisticsDateAndPeriod(startDate, StatisticsPeriod.WEEKLY);
+    }
+
+    public List<ContentStatistics> getMonthlyStatistics(LocalDate yearMonth) {
+        return contentStatisticsRepository.findByStatisticsDateAndPeriod(yearMonth, StatisticsPeriod.MONTHLY);
+    }
+
+    public List<ContentStatistics> getContentStatistics(Long contentPostId, LocalDate startDate, LocalDate endDate) {
+        return contentStatisticsRepository.findByContentPostIdAndStatisticsDateBetweenAndPeriod(
+                contentPostId, startDate, endDate, StatisticsPeriod.DAILY);
     }
 }

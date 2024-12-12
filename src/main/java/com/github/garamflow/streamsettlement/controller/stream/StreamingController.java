@@ -34,7 +34,6 @@ public class StreamingController {
             @RequestParam @Min(1) Long userId,
             @PathVariable @Min(1) Long contentId
     ) {
-        log.debug("Start streaming request - userId: {}, contentId: {}", userId, contentId);
 
         try {
             ContentPlaybackInfo playbackInfo = streamingServiceImpl.startPlayback(userId, contentId);
@@ -50,7 +49,6 @@ public class StreamingController {
                 dailyStreamingContentCacheService.setContentId(contentId);
                 viewCountCacheServiceImpl.incrementViewCount(contentId);
                 viewAbusingCacheService.setAbusing(abusingKey);
-                log.debug("View count processed for content: {}", contentId);
             }
 
             StreamingStartResponse response = StreamingStartResponse.builder()
@@ -75,8 +73,6 @@ public class StreamingController {
             @PathVariable @Min(1) Long contentId,
             @Valid @RequestBody StreamingEndRequest request
     ) {
-        log.debug("End streaming request - userId: {}, contentPostId: {}", userId, contentId);
-
         try {
             streamingServiceImpl.endPlayback(
                     userId,
@@ -85,7 +81,6 @@ public class StreamingController {
                     request.endType()
             );
 
-            log.info("Streaming ended successfully - userId: {}, contentPostId: {}", userId, contentId);
             return ResponseEntity.noContent().build();
 
         } catch (Exception e) {

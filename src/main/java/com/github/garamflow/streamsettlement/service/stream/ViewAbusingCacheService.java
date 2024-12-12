@@ -41,13 +41,6 @@ public class ViewAbusingCacheService {
                 boolean isCreator = key.memberId().equals(key.creatorId());
                 boolean hasAbuseRecord = Boolean.TRUE.equals(redisTemplate.hasKey(abuseKey));
 
-                if (isCreator) {
-                    log.debug("Creator viewing their own content: {}", key);
-                }
-                if (hasAbuseRecord) {
-                    log.debug("Abuse record found for key: {}", key);
-                }
-
                 return isCreator || hasAbuseRecord;
             } finally {
                 lock.unlock();
@@ -70,7 +63,6 @@ public class ViewAbusingCacheService {
                     "1",
                     ABUSE_WINDOW
             );
-            log.debug("Set abuse record for key: {} with window: {}", key, ABUSE_WINDOW);
         } catch (Exception e) {
             log.error("Failed to set abuse record for key: {}", key, e);
             throw new CacheOperationException("Failed to set abuse record", e);

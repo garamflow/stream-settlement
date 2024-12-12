@@ -2,6 +2,7 @@ package com.github.garamflow.streamsettlement.repository.log;
 
 import com.github.garamflow.streamsettlement.entity.stream.Log.DailyWatchedContent;
 import com.github.garamflow.streamsettlement.entity.stream.Log.MemberContentWatchLog;
+import com.querydsl.core.Tuple;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
@@ -10,7 +11,6 @@ import org.springframework.batch.item.database.JdbcPagingItemReader;
 import org.springframework.batch.item.database.Order;
 import org.springframework.batch.item.database.builder.JdbcPagingItemReaderBuilder;
 import org.springframework.batch.item.database.support.MySqlPagingQueryProvider;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import javax.sql.DataSource;
@@ -23,35 +23,54 @@ import static com.github.garamflow.streamsettlement.entity.stream.Log.QMemberCon
 @Repository
 @RequiredArgsConstructor
 public class MemberContentWatchLogCustomRepositoryImpl implements MemberContentWatchLogCustomRepository {
-    private final JdbcTemplate jdbcTemplate;
     private final DataSource dataSource;
-
     private final JPAQueryFactory queryFactory;
-
 
     @Override
     public Map<String, Long> getPartitionInfo(LocalDate targetDate) {
-        String sql = """
-                SELECT COALESCE(MIN(id), 0) as min_id,
-                       COALESCE(MAX(id), 0) as max_id,
-                       COUNT(*) as total_count
-                FROM member_content_watch_log
-                WHERE log_date = ?
-                """;
+        // MIN, MAX, COUNT를 한 번의 쿼리로 조회
+        Tuple result = queryFactory
+                .select(
+                        memberContentWatchLog.id.min(),
+                        memberContentWatchLog.id.max(),
+                        memberContentWatchLog.count()
+                )
+                .from(memberContentWatchLog)
+                .where(memberContentWatchLog.watchedDate.eq(targetDate))
+                .fetchOne();
 
-        Map<String, Object> result = jdbcTemplate.queryForMap(sql, targetDate);
         Map<String, Long> partitionInfo = new HashMap<>();
-        partitionInfo.put("minId", ((Number) result.get("min_id")).longValue());
-        partitionInfo.put("maxId", ((Number) result.get("max_id")).longValue());
-        partitionInfo.put("totalCount", ((Number) result.get("total_count")).longValue());
+        partitionInfo.put("minId", result.get(memberContentWatchLog.id.min()) != null ?
+                result.get(memberContentWatchLog.id.min()) : 0L);
+        partitionInfo.put("maxId", result.get(memberContentWatchLog.id.max()) != null ?
+                result.get(memberContentWatchLog.id.max()) : 0L);
+        partitionInfo.put("totalCount", result.get(memberContentWatchLog.count()));
 
         return partitionInfo;
     }
 
     @Override
+    public List<MemberContentWatchLog> findByContentPostIdAndWatchedDateWithPaging(
+            Long contentPostId,
+            LocalDate watchedDate,
+            Long cursorId,
+            Long fetchSize) {
+        return queryFactory
+                .selectFrom(memberContentWatchLog)
+                .where(
+                        memberContentWatchLog.contentPostId.eq(contentPostId),
+                        memberContentWatchLog.watchedDate.eq(watchedDate),
+                        cursorIdCondition(cursorId)
+                )
+                .orderBy(memberContentWatchLog.id.asc())
+                .limit(fetchSize)
+                .fetch();
+    }
+
+    @Override
     public Set<Long> findContentIdsByDate(LocalDate date) {
         List<Long> contentIds = queryFactory
-                .select(memberContentWatchLog.contentPostId)  // contentPostId만 선택
+                .select(memberContentWatchLog.contentPostId)
                 .from(memberContentWatchLog)
                 .where(watchedDateEq(date))
                 .fetch();
@@ -121,6 +140,10 @@ public class MemberContentWatchLogCustomRepositoryImpl implements MemberContentW
                 .getExecutionContext()
                 .get("contentIds");
         return contentIds;
+    }
+
+    private BooleanExpression cursorIdCondition(Long cursorId) {
+        return cursorId != null ? memberContentWatchLog.id.gt(cursorId) : null;
     }
 
     private BooleanExpression watchedDateEq(LocalDate date) {

@@ -48,8 +48,6 @@ public class DailyLogReader implements ItemReader<MemberContentWatchLog> {
         }
 
         LocalDate targetDate = validateAndParseDate(targetDateStr);
-        log.info("Reader initialized for targetDate: {}, startContentId: {}, endContentId: {}",
-                targetDate, startContentId, endContentId);
 
         delegate = new JdbcPagingItemReaderBuilder<MemberContentWatchLog>()
                 .name("dailyLogReader")

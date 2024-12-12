@@ -85,8 +85,6 @@ public class DailyLogPartitioner implements Partitioner {
             context.putLong("endContentId", currentPartitionEndId);
 
             partitions.put(String.format("partition%d", partitionNumber), context);
-            log.info("Created partition{}: startContentId={}, endContentId={}",
-                    partitionNumber, currentPartitionStartId, currentPartitionEndId);
 
             currentPartitionStartId += partitionSize;
             currentPartitionEndId += partitionSize;

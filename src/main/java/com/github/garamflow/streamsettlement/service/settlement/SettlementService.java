@@ -1,8 +1,6 @@
 package com.github.garamflow.streamsettlement.service.settlement;
 
 import com.github.garamflow.streamsettlement.entity.settlement.Settlement;
-import com.github.garamflow.streamsettlement.repository.log.DailyWatchedContentRepository;
-import com.github.garamflow.streamsettlement.repository.log.MemberContentWatchLogRepository;
 import com.github.garamflow.streamsettlement.repository.settlement.SettlementRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,8 +19,6 @@ import java.util.List;
 public class SettlementService {
 
     private final SettlementRepository settlementRepository;
-    private final MemberContentWatchLogRepository memberContentWatchLogRepository;
-    private final DailyWatchedContentRepository dailyWatchedContentRepository;
 
     /**
      * 일별 정산 내역을 조회합니다.
@@ -67,7 +63,7 @@ public class SettlementService {
 //        List<MemberContentWatchLog> watchLogs = memberContentWatchLogRepository
 //            .findByContentPostIdAndWatchedDateBetween(contentPostId, startDate, endDate);
 //
-        return settlementRepository.findByContentStatisticsContentPostIdAndSettlementDateBetween(
+        return settlementRepository.findByContentPostIdAndSettlementDateBetween(
                 contentId, startDate, endDate);
     }
 

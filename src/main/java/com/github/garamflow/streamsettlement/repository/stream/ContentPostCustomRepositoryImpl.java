@@ -33,16 +33,12 @@ public class ContentPostCustomRepositoryImpl implements ContentPostCustomReposit
                 """;
 
         MapSqlParameterSource[] parameterSources = viewCounts.entrySet().stream()
-                .map(entry -> {
-                    log.debug("Updating content {} with view count {}", entry.getKey(), entry.getValue());
-                    return new MapSqlParameterSource()
-                            .addValue("contentId", entry.getKey())
-                            .addValue("viewCount", entry.getValue());
-                })
+                .map(entry -> new MapSqlParameterSource()
+                        .addValue("contentId", entry.getKey())
+                        .addValue("viewCount", entry.getValue()))
                 .toArray(MapSqlParameterSource[]::new);
 
         int[] updateCounts = jdbcTemplate.batchUpdate(sql, parameterSources);
-        log.debug("Updated {} records", updateCounts.length);
     }
 
     @Override
