@@ -1,6 +1,7 @@
 package com.github.garamflow.streamsettlement.repository.statistics;
 
 import com.github.garamflow.streamsettlement.entity.statistics.ContentStatistics;
+import com.github.garamflow.streamsettlement.entity.statistics.QContentStatistics;
 import com.github.garamflow.streamsettlement.entity.statistics.StatisticsPeriod;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
@@ -128,17 +129,18 @@ public class ContentStatisticsCustomRepositoryImpl implements ContentStatisticsC
                 .fetch();
     }
 
+    // 개선된 벌크 인서트 쿼리
     @Override
     @Transactional
     public void bulkInsertStatistics(List<ContentStatistics> statistics) {
         String sql = """
-                INSERT INTO content_statistics
-                (content_post_id, statistics_date, period, view_count, watch_time, accumulated_views)
-                VALUES (:contentPostId, :statisticsDate, :period, :viewCount, :watchTime, :accumulatedViews)
-                ON DUPLICATE KEY UPDATE
-                    view_count = view_count + VALUES(view_count),
-                    watch_time = watch_time + VALUES(watch_time),
-                    accumulated_views = GREATEST(accumulated_views, VALUES(accumulated_views))
+                    INSERT INTO content_statistics
+                    (content_post_id, statistics_date, period, view_count, watch_time, accumulated_views)
+                    VALUES (:contentPostId, :statisticsDate, :period, :viewCount, :watchTime, :accumulatedViews)
+                    ON DUPLICATE KEY UPDATE
+                        view_count = view_count + VALUES(view_count),
+                        watch_time = watch_time + VALUES(watch_time),
+                        accumulated_views = GREATEST(accumulated_views, VALUES(accumulated_views))
                 """;
 
         namedParameterJdbcTemplate.batchUpdate(sql, getStatisticsParameterSources(statistics));
@@ -184,5 +186,21 @@ public class ContentStatisticsCustomRepositoryImpl implements ContentStatisticsC
 
     private BooleanExpression cursorCondition(Long cursorId) {
         return cursorId == null ? null : contentStatistics.id.goe(cursorId);
+    }
+
+    @Override
+    public List<ContentStatistics> findByIdBetweenAndStatisticsDateOrderByContentPostId(
+            Long startId, Long endId, LocalDate date) {
+        QContentStatistics cs = QContentStatistics.contentStatistics;
+
+        return jpaQueryFactory
+                .select(cs)
+                .from(cs)
+                .where(
+                        cs.id.between(startId, endId),
+                        cs.statisticsDate.eq(date)
+                )
+                .orderBy(cs.contentPost.id.asc())
+                .fetch();
     }
 } 

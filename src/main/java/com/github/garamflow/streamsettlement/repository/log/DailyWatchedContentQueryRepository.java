@@ -14,10 +14,10 @@ import static com.github.garamflow.streamsettlement.entity.stream.Log.QDailyWatc
 @Repository
 @RequiredArgsConstructor
 public class DailyWatchedContentQueryRepository {
-    private final JPAQueryFactory queryFactory;
+    private final JPAQueryFactory jpaQueryFactory;
 
     public List<Long> findContentIdsByWatchedDate(LocalDate watchedDate, Long cursorId, Long size) {
-        return queryFactory
+        return jpaQueryFactory
                 .select(dailyWatchedContent.contentPostId)
                 .from(dailyWatchedContent)
                 .where(
@@ -30,7 +30,7 @@ public class DailyWatchedContentQueryRepository {
     }
 
     public Long findMinIdByWatchedDate(LocalDate watchedDate) {
-        return queryFactory
+        return jpaQueryFactory
                 .select(dailyWatchedContent.id.min())
                 .from(dailyWatchedContent)
                 .where(watchedDateEq(watchedDate))
@@ -38,7 +38,7 @@ public class DailyWatchedContentQueryRepository {
     }
 
     public Long findMaxIdByWatchedDate(LocalDate watchedDate) {
-        return queryFactory
+        return jpaQueryFactory
                 .select(dailyWatchedContent.id.max())
                 .from(dailyWatchedContent)
                 .where(watchedDateEq(watchedDate))

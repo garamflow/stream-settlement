@@ -1,7 +1,7 @@
-package com.github.garamflow.streamsettlement.service.user;
+package com.github.garamflow.streamsettlement.service.member;
 
 import com.github.garamflow.streamsettlement.entity.member.Member;
-import com.github.garamflow.streamsettlement.repository.user.MemberRepository;
+import com.github.garamflow.streamsettlement.repository.member.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 

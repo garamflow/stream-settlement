@@ -6,6 +6,9 @@ import com.github.garamflow.streamsettlement.entity.statistics.StatisticsPeriod;
 import java.time.LocalDate;
 import java.util.List;
 
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
 public interface ContentStatisticsCustomRepository {
     void bulkInsertStatistics(List<ContentStatistics> statistics);
 
@@ -24,4 +27,10 @@ public interface ContentStatisticsCustomRepository {
     List<ContentStatistics> findByContentPostIdAndStatisticsDateBetween(Long contentPostId, LocalDate startDate, LocalDate endDate);
 
     List<ContentStatistics> findAllByStatisticsDateAndPeriodWithFetch(LocalDate statisticsDate, StatisticsPeriod period);
+
+    List<ContentStatistics> findByIdBetweenAndStatisticsDateOrderByContentPostId(
+            Long startId, 
+            Long endId, 
+            LocalDate date
+    );
 } 

@@ -18,7 +18,11 @@ public class QAdvertisement extends EntityPathBase<Advertisement> {
 
     private static final long serialVersionUID = -1099180882L;
 
+    private static final PathInits INITS = PathInits.DIRECT2;
+
     public static final QAdvertisement advertisement = new QAdvertisement("advertisement");
+
+    public final com.github.garamflow.streamsettlement.entity.member.QMember advertiser;
 
     public final ListPath<com.github.garamflow.streamsettlement.entity.stream.mapping.AdvertisementContentPost, com.github.garamflow.streamsettlement.entity.stream.mapping.QAdvertisementContentPost> contentPosts = this.<com.github.garamflow.streamsettlement.entity.stream.mapping.AdvertisementContentPost, com.github.garamflow.streamsettlement.entity.stream.mapping.QAdvertisementContentPost>createList("contentPosts", com.github.garamflow.streamsettlement.entity.stream.mapping.AdvertisementContentPost.class, com.github.garamflow.streamsettlement.entity.stream.mapping.QAdvertisementContentPost.class, PathInits.DIRECT2);
 
@@ -37,15 +41,24 @@ public class QAdvertisement extends EntityPathBase<Advertisement> {
     public final DateTimePath<java.time.LocalDateTime> updatedAt = createDateTime("updatedAt", java.time.LocalDateTime.class);
 
     public QAdvertisement(String variable) {
-        super(Advertisement.class, forVariable(variable));
+        this(Advertisement.class, forVariable(variable), INITS);
     }
 
     public QAdvertisement(Path<? extends Advertisement> path) {
-        super(path.getType(), path.getMetadata());
+        this(path.getType(), path.getMetadata(), PathInits.getFor(path.getMetadata(), INITS));
     }
 
     public QAdvertisement(PathMetadata metadata) {
-        super(Advertisement.class, metadata);
+        this(metadata, PathInits.getFor(metadata, INITS));
+    }
+
+    public QAdvertisement(PathMetadata metadata, PathInits inits) {
+        this(Advertisement.class, metadata, inits);
+    }
+
+    public QAdvertisement(Class<? extends Advertisement> type, PathMetadata metadata, PathInits inits) {
+        super(type, metadata, inits);
+        this.advertiser = inits.isInitialized("advertiser") ? new com.github.garamflow.streamsettlement.entity.member.QMember(forProperty("advertiser")) : null;
     }
 
 }

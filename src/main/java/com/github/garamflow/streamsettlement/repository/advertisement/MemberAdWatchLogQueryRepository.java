@@ -16,10 +16,10 @@ import static com.github.garamflow.streamsettlement.entity.stream.Log.QMemberAdW
 @RequiredArgsConstructor
 public class MemberAdWatchLogQueryRepository {
 
-    private final JPAQueryFactory queryFactory;
+    private final JPAQueryFactory jpaQueryFactory;
 
     public List<MemberAdWatchLog> findUserAdWatchHistoriesByCondition(Long contentId, Long cursorId, LocalDate date, Long fetchSize) {
-        return queryFactory
+        return jpaQueryFactory
                 .select(memberAdWatchLog)
                 .from(memberAdWatchLog)
                 .where(

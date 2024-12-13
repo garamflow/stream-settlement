@@ -46,7 +46,7 @@ public class QAdvertisementContentPost extends EntityPathBase<AdvertisementConte
 
     public QAdvertisementContentPost(Class<? extends AdvertisementContentPost> type, PathMetadata metadata, PathInits inits) {
         super(type, metadata, inits);
-        this.advertisement = inits.isInitialized("advertisement") ? new com.github.garamflow.streamsettlement.entity.stream.advertisement.QAdvertisement(forProperty("advertisement")) : null;
+        this.advertisement = inits.isInitialized("advertisement") ? new com.github.garamflow.streamsettlement.entity.stream.advertisement.QAdvertisement(forProperty("advertisement"), inits.get("advertisement")) : null;
         this.contentPost = inits.isInitialized("contentPost") ? new com.github.garamflow.streamsettlement.entity.stream.content.QContentPost(forProperty("contentPost"), inits.get("contentPost")) : null;
     }
 

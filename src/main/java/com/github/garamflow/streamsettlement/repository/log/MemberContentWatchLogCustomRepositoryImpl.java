@@ -24,12 +24,11 @@ import static com.github.garamflow.streamsettlement.entity.stream.Log.QMemberCon
 @RequiredArgsConstructor
 public class MemberContentWatchLogCustomRepositoryImpl implements MemberContentWatchLogCustomRepository {
     private final DataSource dataSource;
-    private final JPAQueryFactory queryFactory;
+    private final JPAQueryFactory jpaQueryFactory;
 
     @Override
     public Map<String, Long> getPartitionInfo(LocalDate targetDate) {
-        // MIN, MAX, COUNT를 한 번의 쿼리로 조회
-        Tuple result = queryFactory
+        Tuple result = jpaQueryFactory
                 .select(
                         memberContentWatchLog.id.min(),
                         memberContentWatchLog.id.max(),
@@ -55,7 +54,7 @@ public class MemberContentWatchLogCustomRepositoryImpl implements MemberContentW
             LocalDate watchedDate,
             Long cursorId,
             Long fetchSize) {
-        return queryFactory
+        return jpaQueryFactory
                 .selectFrom(memberContentWatchLog)
                 .where(
                         memberContentWatchLog.contentPostId.eq(contentPostId),
@@ -69,7 +68,7 @@ public class MemberContentWatchLogCustomRepositoryImpl implements MemberContentW
 
     @Override
     public Set<Long> findContentIdsByDate(LocalDate date) {
-        List<Long> contentIds = queryFactory
+        List<Long> contentIds = jpaQueryFactory
                 .select(memberContentWatchLog.contentPostId)
                 .from(memberContentWatchLog)
                 .where(watchedDateEq(date))
@@ -108,7 +107,7 @@ public class MemberContentWatchLogCustomRepositoryImpl implements MemberContentW
 
     public List<DailyWatchedContent> findByLogDateAndIdGreaterThan(
             LocalDate logDate, Long cursorId, Long limit) {
-        return queryFactory
+        return jpaQueryFactory
                 .selectFrom(dailyWatchedContent)
                 .where(
                         dailyWatchedContent.watchedDate.eq(logDate),
@@ -121,7 +120,7 @@ public class MemberContentWatchLogCustomRepositoryImpl implements MemberContentW
 
     public List<DailyWatchedContent> findByLogDateAndContentPostIdsAndIdGreaterThan(
             LocalDate logDate, Set<Long> contentPostIds, Long cursorId, Long limit) {
-        return queryFactory
+        return jpaQueryFactory
                 .selectFrom(dailyWatchedContent)
                 .where(
                         dailyWatchedContent.watchedDate.eq(logDate),

@@ -5,6 +5,7 @@ import com.github.garamflow.streamsettlement.entity.statistics.StatisticsPeriod;
 import com.github.garamflow.streamsettlement.entity.stream.Log.MemberContentWatchLog;
 import com.github.garamflow.streamsettlement.entity.stream.Log.StreamingStatus;
 import com.github.garamflow.streamsettlement.entity.stream.content.ContentPost;
+import com.github.garamflow.streamsettlement.repository.statistics.ContentStatisticsRepository;
 import com.github.garamflow.streamsettlement.repository.stream.ContentPostRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,10 +16,7 @@ import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.NoSuchElementException;
+import java.util.*;
 
 @Slf4j
 @Component
@@ -27,6 +25,7 @@ import java.util.NoSuchElementException;
 public class DailyLogProcessor implements ItemProcessor<MemberContentWatchLog, List<ContentStatistics>> {
 
     private final ContentPostRepository contentPostRepository;
+    private final ContentStatisticsRepository contentStatisticsRepository;
 
     @Value("#{jobParameters['targetDate']}")
     private LocalDate targetDate;
@@ -36,7 +35,6 @@ public class DailyLogProcessor implements ItemProcessor<MemberContentWatchLog, L
     @Override
     public List<ContentStatistics> process(@NonNull MemberContentWatchLog watchLog) {
         if (!isValid(watchLog)) {
-            log.warn("Invalid watchLog: {}", watchLog);
             return null;
         }
 
@@ -45,14 +43,25 @@ public class DailyLogProcessor implements ItemProcessor<MemberContentWatchLog, L
 
         ContentStatistics statistics = statisticsMap.computeIfAbsent(
                 contentPost.getId(),
-                id -> ContentStatistics.customBuilder()
-                        .contentPost(contentPost)
-                        .statisticsDate(targetDate)
-                        .period(StatisticsPeriod.DAILY)
-                        .viewCount(0L)
-                        .watchTime(0L)
-                        .accumulatedViews(contentPost.getTotalViews())
-                        .build()
+                id -> {
+                    // findLatestByContentPostId 대신 기존 메서드 활용
+                    Optional<ContentStatistics> latest = contentStatisticsRepository
+                            .findByContentPost_IdAndPeriodAndStatisticsDate(
+                                    contentPost.getId(),
+                                    StatisticsPeriod.DAILY,
+                                    targetDate
+                            );
+
+                    return ContentStatistics.customBuilder()
+                            .contentPost(contentPost)
+                            .statisticsDate(targetDate)
+                            .period(StatisticsPeriod.DAILY)
+                            .viewCount(0L)
+                            .watchTime(0L)
+                            .accumulatedViews(latest.map(ContentStatistics::getAccumulatedViews)
+                                    .orElse(contentPost.getTotalViews()))
+                            .build();
+                }
         );
 
         statistics.incrementViewCount();

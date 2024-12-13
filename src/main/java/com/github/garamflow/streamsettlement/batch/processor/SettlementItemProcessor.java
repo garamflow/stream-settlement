@@ -29,13 +29,24 @@ public class SettlementItemProcessor implements ItemProcessor<StatisticsAndSettl
         ContentStatistics statistics = item.statistics();
         PreviousSettlementDto previousSettlement = item.previousSettlement();
 
-        // 누적 정산 계산
-        long totalContentRevenue = ContentRevenueRange.calculateRevenueByViews(statistics.getAccumulatedViews());
-        long totalAdRevenue = AdRevenueRange.calculateRevenueByViews(statistics.getWatchTime());
+        // 누적 수익 계산
+        long totalContentRevenue = ContentRevenueRange.calculateRevenueByViews(
+                statistics.getAccumulatedViews()
+        );
+        long totalAdRevenue = AdRevenueRange.calculateRevenueByViews(
+                statistics.getWatchTime()
+        );
 
-        // 일일 정산 계산
-        long dailyContentRevenue = totalContentRevenue - previousSettlement.previousTotalContentRevenue();
-        long dailyAdRevenue = totalAdRevenue - previousSettlement.previousTotalAdRevenue();
+        // 일일 정산 계산 (음수 방지)
+        long dailyContentRevenue = Math.max(0,
+                totalContentRevenue - previousSettlement.previousTotalContentRevenue()
+        );
+        long dailyAdRevenue = Math.max(0,
+                totalAdRevenue - previousSettlement.previousTotalAdRevenue()
+        );
+
+        log.debug("Processing settlement - contentId: {}, dailyContentRevenue: {}, dailyAdRevenue: {}",
+                statistics.getContentPost().getId(), dailyContentRevenue, dailyAdRevenue);
 
         return Settlement.customBuilder()
                 .contentPostId(statistics.getContentPost().getId())
