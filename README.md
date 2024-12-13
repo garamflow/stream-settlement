@@ -14,19 +14,14 @@
 
 ### 주요 기능
 
-### 1. 배치를 이용한 데이터 처리
+## ✨ 주요 기능
 
-- Spring Batch Partitioning을 활용한 병렬 처리
-- 일일 100만건 이상의 시청 로그 처리
-- 청크 기반 처리로 메모리 사용 최적화
-- 페이징 처리로 대용량 데이터 안정적 처리
+| 📊 정산 시스템 | 📈 통계 시스템 |🔄 배치 처리 | 🛡 데이터 관리 |
+|--------------|--------------|--------------|--------------|
+| 일일 시청 기반 수익 정산 | 영상별 일/주/월/연간 통계 |일일 시청 로그 수집 | 시청 로그 유효성 검증 |
+| 광고 수익 정산 | 시청 시간/조회수 통계 |자동 통계 집계 | 정산 데이터 정합성 보장 |
+| 정산율 기반 차등 지급 | 광고 시청 통계 |정산 데이터 생성 | 통계 데이터 신뢰성 확보 |
 
-### 2. 통계 집계 시스템
-
-- 일간/주간/월간/연간 통계 자동 집계
-- 컨텐츠별 시청 시간 및 조회수 통계
-- 광고 수익 정산을 위한 광고 시청 통계
-- 통계 데이터 정합성 보장
 
 ---
 
@@ -47,9 +42,11 @@
   - 1천만 건 기준 처리 시간 50% 단축 (4,123ms → 2,072ms)
   - 데이터 규모가 커질수록 성능 향상 폭이 증가 (10,000건: 36% → 10,000,000건: 50%)
 
+<br>
 
 - **3차 최적화**: Redis 캐시 기반 데이터 필터링 도입
   - 조회수 0인 컨텐츠 필터링으로 배치 처리 시간 67.4% 단축
+  - SQL 필터링 대비 처리 속도 2.1배 향상 (5,847ms → 2,785ms)
   - Redis 활용으로 불필요한 데이터 처리 제거
   - 실제 처리가 필요한 데이터만으로 파티션 크기 최적화
 
@@ -61,7 +58,7 @@
 | **Language**    | ![Java](https://img.shields.io/badge/Java-21-%23ED8B00?logo=openjdk&logoColor=white) |
 | **Framework**   | ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3-%236DB33F?logo=spring-boot&logoColor=white) ![Spring Batch](https://img.shields.io/badge/Spring%20Batch-3.3.4-%236DB33F?logo=spring&logoColor=white) ![Spring Data JPA](https://img.shields.io/badge/Spring%20Data%20JPA-%236DB33F?logo=spring&logoColor=white)       |
 | **Build**       | ![Gradle](https://img.shields.io/badge/Gradle-%2302303A?logo=gradle&logoColor=white)                           |
-| **Database**    | ![MySQL](https://img.shields.io/badge/MySQL-8.0-%234479A1?logo=mysql&logoColor=white)                          |
+| **Database**    | ![MySQL](https://img.shields.io/badge/MySQL-8.0-%234479A1?logo=mysql&logoColor=white) ![Redis](https://img.shields.io/badge/Redis-%23DC382D?logo=redis&logoColor=white)                           |
 | **DevOps**      | ![Docker](https://img.shields.io/badge/Docker-%232496ED?logo=docker&logoColor=white) ![Docker Compose](https://img.shields.io/badge/Docker%20Compose-%232496ED?logo=docker&logoColor=white)                           |
 | **Testing**     | ![JUnit](https://img.shields.io/badge/JUnit-5-%2325A162?logo=junit5&logoColor=white)                           |
 | **IDE**         | ![IntelliJ IDEA](https://img.shields.io/badge/IntelliJ%20IDEA-%23000000?logo=intellij-idea&logoColor=white)    |
