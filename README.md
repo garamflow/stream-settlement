@@ -30,25 +30,27 @@
 - **[자세히 알아보기](https://github.com/garamflow/stream-settlement/wiki/%EC%8A%A4%ED%8A%B8%EB%A6%AC%EB%B0%8D-%ED%86%B5%EA%B3%84-%EB%B0%8F-%EC%A0%95%EC%82%B0-%EB%B0%B0%EC%B9%98-%EC%B5%9C%EC%A0%81%ED%99%94-%ED%9E%88%EC%8A%A4%ED%86%A0%EB%A6%AC)**
 
 - **1차 최적화**: Spring Batch Partitioning으로 병렬 처리 도입
+  - ID 기반 분할 및 독립 트랜잭션 처리
   - 데이터 크기에 따른 동적 Grid Size 설정으로 분산 처리 최적화
-  - 데드락 발생 빈도 감소: 평균 4회 → 0회
-  - 처리 성능 개선: TPS 기준 122.2% 향상
-  - CPU 사용률 감소: 53.3% 감소
+    - 데드락 발생 빈도 감소: 평균 4회 → 0회
+    - 처리 성능 개선: TPS 기준 122.2% 향상
+    - CPU 사용률 감소: 53.3% 감소
 
   <br>
 
 - **2차 최적화**: JDBC Bulk Insert 도입으로 배치 성능 개선
   - JPA 개별 INSERT 방식에서 JDBC Bulk Insert 방식으로 전환
-  - 1천만 건 기준 처리 시간 50% 단축 (4,123ms → 2,072ms)
-  - 데이터 규모가 커질수록 성능 향상 폭이 증가 (10,000건: 36% → 10,000,000건: 50%)
+    - 1천만 건 기준 처리 시간 50% 단축 (4,123ms → 2,072ms)
+    - 데이터 규모가 커질수록 성능 향상 폭이 증가 (10,000건: 36% → 10,000,000건: 50%)
 
 <br>
 
 - **3차 최적화**: Redis 캐시 기반 데이터 필터링 도입
-  - 조회수 0인 컨텐츠 필터링으로 배치 처리 시간 67.4% 단축
-  - SQL 필터링 대비 처리 속도 2.1배 향상 (5,847ms → 2,785ms)
   - Redis 활용으로 불필요한 데이터 처리 제거
   - 실제 처리가 필요한 데이터만으로 파티션 크기 최적화
+    - 조회수 0인 컨텐츠 필터링으로 배치 처리 시간 67.4% 단축
+    - SQL 필터링 대비 처리 속도 2.1배 향상 (5,847ms → 2,785ms)
+
 
 ---
 
@@ -69,7 +71,7 @@
 ## Wiki
 
 - **[실행 방법](https://github.com/garamflow/stream-settlement/wiki#%EC%8B%A4%ED%96%89-%EB%B0%A9%EB%B2%95)**
+- **[트러블슈팅](https://github.com/garamflow/stream-settlement/wiki#%ED%8A%B8%EB%9F%AC%EB%B8%94%EC%8A%88%ED%8C%85)**
+- **[기술적 의사결정](https://github.com/garamflow/stream-settlement/wiki#%EA%B8%B0%EC%88%A0%EC%A0%81-%EC%9D%98%EC%82%AC%EA%B2%B0%EC%A0%95)**
 - **[시스템 아키텍처](../../wiki/Architecture)**
 - **[ERD](../../wiki/ERD)**
-- **[트러블슈팅](https://github.com/garamflow/stream-settlement/wiki#%ED%8A%B8%EB%9F%AC%EB%B8%94%EC%8A%88%ED%8C%85)**
-- **[테스트 전략](https://github.com/garamflow/stream-settlement/wiki#%ED%85%8C%EC%8A%A4%ED%8A%B8-%EC%A0%84%EB%9E%B5)**
