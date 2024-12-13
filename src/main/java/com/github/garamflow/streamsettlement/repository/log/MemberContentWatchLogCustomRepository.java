@@ -17,7 +17,6 @@ public interface MemberContentWatchLogCustomRepository {
 
     Set<Long> findContentIdsByDate(LocalDate date);
 
-    // 기존 @Query 메소드를 커스텀 메소드로 이동
     List<MemberContentWatchLog> findByContentPostIdAndWatchedDateWithPaging(
             Long contentPostId,
             LocalDate watchedDate,

@@ -33,4 +33,9 @@ public interface SettlementCustomRepository {
     );
 
     List<Settlement> findBySettlementDate(LocalDate settlementDate);
+
+    List<Settlement> findByContentPostIdInAndSettlementDateBefore(
+            List<Long> contentIds,
+            LocalDate date
+    );
 } 

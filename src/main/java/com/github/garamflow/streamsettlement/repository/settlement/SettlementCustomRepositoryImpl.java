@@ -17,32 +17,47 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import static com.github.garamflow.streamsettlement.entity.settlement.QSettlement.settlement;
 
 @Repository
 @RequiredArgsConstructor
 public class SettlementCustomRepositoryImpl implements SettlementCustomRepository {
-    private final NamedParameterJdbcTemplate jdbcTemplate;
-    private final JPAQueryFactory queryFactory;
+    private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
+    private final JPAQueryFactory jpaQueryFactory;
 
     @Override
     @Transactional
     public void bulkInsertSettlement(List<Settlement> settlements) {
         String sql = """
                 INSERT INTO settlement (content_post_id, content_revenue, ad_revenue, 
-                                     total_content_revenue, total_ad_revenue, settlement_date)
+                                     total_content_revenue, total_ad_revenue, settlement_date, status)
                 VALUES (:contentPostId, :contentRevenue, :adRevenue, 
-                       :totalContentRevenue, :totalAdRevenue, :settlementDate)
+                       :totalContentRevenue, :totalAdRevenue, :settlementDate, :status)
+                ON DUPLICATE KEY UPDATE
+                content_revenue = VALUES(content_revenue),
+                ad_revenue = VALUES(ad_revenue),
+                total_content_revenue = VALUES(total_content_revenue),
+                total_ad_revenue = VALUES(total_ad_revenue),
+                status = VALUES(status)
                 """;
 
-        jdbcTemplate.batchUpdate(sql, getSettlementParameterSources(settlements));
-    }
+        // 동일한 contentPostId와 settlementDate에 대해 중복 제거
+        Map<String, Settlement> uniqueSettlements = settlements.stream()
+                .collect(Collectors.toMap(
+                        s -> s.getContentPostId() + "_" + s.getSettlementDate(),
+                        s -> s,
+                        (existing, replacement) -> existing
+                ));
 
-    private MapSqlParameterSource[] getSettlementParameterSources(List<Settlement> settlements) {
-        return settlements.stream()
-                .map(this::getSettlementParameterSource)
-                .toArray(MapSqlParameterSource[]::new);
+        namedParameterJdbcTemplate.batchUpdate(
+                sql, 
+                uniqueSettlements.values().stream()
+                        .map(this::getSettlementParameterSource)
+                        .toArray(MapSqlParameterSource[]::new)
+        );
     }
 
     private MapSqlParameterSource getSettlementParameterSource(Settlement settlement) {
@@ -52,14 +67,15 @@ public class SettlementCustomRepositoryImpl implements SettlementCustomRepositor
                 .addValue("adRevenue", settlement.getAdRevenue())
                 .addValue("totalContentRevenue", settlement.getTotalContentRevenue())
                 .addValue("totalAdRevenue", settlement.getTotalAdRevenue())
-                .addValue("settlementDate", settlement.getSettlementDate());
+                .addValue("settlementDate", settlement.getSettlementDate())
+                .addValue("status", settlement.getStatus().name());
     }
 
     @Override
     public List<Settlement> findSettlementsByDateAndStatus(
             LocalDate settlementDate,
             SettlementStatus status) {
-        return queryFactory
+        return jpaQueryFactory
                 .selectFrom(settlement)
                 .where(
                         settlement.settlementDate.eq(settlementDate),
@@ -70,7 +86,7 @@ public class SettlementCustomRepositoryImpl implements SettlementCustomRepositor
 
     @Override
     public List<Settlement> findUnprocessedSettlements(LocalDate settlementDate) {
-        return queryFactory
+        return jpaQueryFactory
                 .selectFrom(settlement)
                 .where(
                         settlement.settlementDate.eq(settlementDate),
@@ -86,7 +102,7 @@ public class SettlementCustomRepositoryImpl implements SettlementCustomRepositor
     ) {
         QSettlement subSettlement = new QSettlement("sub");
 
-        return queryFactory
+        return jpaQueryFactory
                 .select(Projections.constructor(PreviousSettlementDto.class,
                         settlement.contentPostId,
                         settlement.totalContentRevenue,
@@ -110,7 +126,7 @@ public class SettlementCustomRepositoryImpl implements SettlementCustomRepositor
     @Override
     @Transactional
     public void bulkUpdateStatus(List<Long> settlementIds, SettlementStatus status) {
-        queryFactory
+        jpaQueryFactory
                 .update(settlement)
                 .set(settlement.status, status)
                 .where(settlement.id.in(settlementIds))
@@ -120,7 +136,7 @@ public class SettlementCustomRepositoryImpl implements SettlementCustomRepositor
     @Override
     public List<Settlement> findByContentIdAndDateBetween(
             Long contentId, LocalDate startDate, LocalDate endDate) {
-        return queryFactory
+        return jpaQueryFactory
                 .selectFrom(settlement)
                 .where(
                         contentPostIdEq(contentId),
@@ -132,7 +148,7 @@ public class SettlementCustomRepositoryImpl implements SettlementCustomRepositor
     @Override
     public Settlement findTopByContentPostIdAndSettlementDateBefore(
             Long contentPostId, LocalDate settlementDate) {
-        return queryFactory
+        return jpaQueryFactory
                 .selectFrom(settlement)
                 .where(
                         contentPostIdEq(contentPostId),
@@ -143,10 +159,24 @@ public class SettlementCustomRepositoryImpl implements SettlementCustomRepositor
     }
 
     @Override
+    public List<Settlement> findByContentPostIdInAndSettlementDateBefore(
+            List<Long> contentIds,
+            LocalDate date
+    ) {
+        return jpaQueryFactory
+                .selectFrom(settlement)
+                .where(
+                        settlement.contentPostId.in(contentIds),
+                        settlement.settlementDate.before(date)
+                )
+                .fetch();
+    }
+
+    @Override
     public List<Settlement> findBySettlementDate(LocalDate settlementDate) {
         QSettlement sub = new QSettlement("sub");
-        
-        return queryFactory
+
+        return jpaQueryFactory
                 .selectFrom(settlement)
                 .where(
                         settlement.settlementDate.eq(settlementDate),

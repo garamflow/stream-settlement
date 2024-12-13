@@ -1,5 +1,6 @@
 package com.github.garamflow.streamsettlement.entity.stream.advertisement;
 
+import com.github.garamflow.streamsettlement.entity.member.Member;
 import com.github.garamflow.streamsettlement.entity.stream.mapping.AdvertisementContentPost;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -46,6 +47,10 @@ public class Advertisement {
     @OneToMany(mappedBy = "advertisement")
     private List<AdvertisementContentPost> contentPosts = new ArrayList<>();
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "advertiser_id", nullable = false)
+    private Member advertiser;
+
     public static Builder builder() {
       return new Builder();
   }
@@ -55,6 +60,7 @@ public class Advertisement {
       private String title;
       private String description;
       private Long pricePerView;
+      private Member advertiser;
 
       public Builder title(String title) {
           this.title = title;
@@ -71,11 +77,17 @@ public class Advertisement {
           return this;
       }
 
+      public Builder advertiser(Member advertiser) {
+          this.advertiser = advertiser;
+          return this;
+      }
+
       public Advertisement build() {
           Advertisement advertisement = new Advertisement();
           advertisement.title = this.title;
           advertisement.description = this.description;
           advertisement.pricePerView = this.pricePerView;
+          advertisement.advertiser = this.advertiser;
           return advertisement;
       }
   }

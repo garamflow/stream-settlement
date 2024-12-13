@@ -35,15 +35,23 @@
 - **[자세히 알아보기](https://github.com/garamflow/stream-settlement/wiki/%EC%8A%A4%ED%8A%B8%EB%A6%AC%EB%B0%8D-%ED%86%B5%EA%B3%84-%EB%B0%8F-%EC%A0%95%EC%82%B0-%EB%B0%B0%EC%B9%98-%EC%B5%9C%EC%A0%81%ED%99%94-%ED%9E%88%EC%8A%A4%ED%86%A0%EB%A6%AC)**
 
 - **1차 최적화**: Spring Batch Partitioning으로 병렬 처리 도입
-  - 데이터 크기에 따라 유동적인 Gird Size를 설정하며 Partitioning 기능 활용.
-  - 데드락 발생 빈도 감소: 평균 4회 → 0회.
-  - 처리 성능 개선: TPS 기준 122.2% 향상.
-  - CPU 사용률 감소: 53.3% 감소.
-  
+  - 데이터 크기에 따른 동적 Grid Size 설정으로 분산 처리 최적화
+  - 데드락 발생 빈도 감소: 평균 4회 → 0회
+  - 처리 성능 개선: TPS 기준 122.2% 향상
+  - CPU 사용률 감소: 53.3% 감소
+
   <br>
 
-- **2차 최적화**: Spring Batch Writer에서 JDBC Bulk Insert 도입
-  - 1천만건 기준 성능 약 50% 상승 (Avg Time. 4,123ms -> 2,072ms)
+- **2차 최적화**: JDBC Bulk Insert 도입으로 배치 성능 개선
+  - JPA 개별 INSERT 방식에서 JDBC Bulk Insert 방식으로 전환
+  - 1천만 건 기준 처리 시간 50% 단축 (4,123ms → 2,072ms)
+  - 데이터 규모가 커질수록 성능 향상 폭이 증가 (10,000건: 36% → 10,000,000건: 50%)
+
+
+- **3차 최적화**: Redis 캐시 기반 데이터 필터링 도입
+  - 조회수 0인 컨텐츠 필터링으로 배치 처리 시간 67.4% 단축
+  - Redis 활용으로 불필요한 데이터 처리 제거
+  - 실제 처리가 필요한 데이터만으로 파티션 크기 최적화
 
 ---
 

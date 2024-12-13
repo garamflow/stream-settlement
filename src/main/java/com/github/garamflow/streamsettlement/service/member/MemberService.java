@@ -1,4 +1,4 @@
-package com.github.garamflow.streamsettlement.service.user;
+package com.github.garamflow.streamsettlement.service.member;
 
 import com.github.garamflow.streamsettlement.entity.member.Member;
 

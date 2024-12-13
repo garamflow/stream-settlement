@@ -8,6 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.util.Optional;
 
 @Getter
 @Entity
@@ -31,14 +32,14 @@ public class ContentStatistics {
     @Column(name = "period", nullable = false)
     private StatisticsPeriod period; // DAILY, WEEKLY, MONTHLY, YEARLY
 
-    @Column(name = "view_count")
-    private Long viewCount;
+    @Column(name = "view_count", nullable = false)
+    private Long viewCount = 0L;
 
-    @Column(name = "watch_time")
-    private Long watchTime;
+    @Column(name = "watch_time", nullable = false)
+    private Long watchTime = 0L;
 
-    @Column(name = "accumulated_views")
-    private Long accumulatedViews;
+    @Column(name = "accumulated_views", nullable = false)
+    private Long accumulatedViews = 0L;
 
     @Builder(builderMethodName = "customBuilder")
     private ContentStatistics(ContentPost contentPost, LocalDate statisticsDate,
@@ -47,9 +48,11 @@ public class ContentStatistics {
         this.contentPost = contentPost;
         this.statisticsDate = statisticsDate;
         this.period = period;
-        this.viewCount = viewCount;
-        this.watchTime = watchTime;
-        this.accumulatedViews = accumulatedViews;
+        this.viewCount = viewCount != null ? viewCount : 0L;
+        this.watchTime = watchTime != null ? watchTime : 0L;
+        this.accumulatedViews = accumulatedViews != null ? 
+                               accumulatedViews : 
+                               Optional.ofNullable(contentPost.getTotalViews()).orElse(0L);
     }
 
     @Override

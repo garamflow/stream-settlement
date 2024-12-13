@@ -1,4 +1,4 @@
-package com.github.garamflow.streamsettlement.repository.user;
+package com.github.garamflow.streamsettlement.repository.member;
 
 import com.github.garamflow.streamsettlement.entity.member.Member;
 import org.springframework.data.jpa.repository.JpaRepository;

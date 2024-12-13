@@ -14,13 +14,13 @@ import static com.github.garamflow.streamsettlement.entity.settlement.QSettlemen
 @Repository
 @RequiredArgsConstructor
 public class SettlementRateCustomRepositoryImpl implements SettlementRateCustomRepository {
-    private final JPAQueryFactory queryFactory;
+    private final JPAQueryFactory jpaQueryFactory;
 
     @Override
     public Optional<SettlementRate> findApplicableRate(
             SettlementType type, Long views, LocalDateTime dateTime) {
         return Optional.ofNullable(
-                queryFactory
+                jpaQueryFactory
                         .selectFrom(settlementRate)
                         .where(
                                 settlementRate.settlementType.eq(type),
