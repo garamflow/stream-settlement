@@ -4,6 +4,7 @@ import com.github.garamflow.streamsettlement.repository.stream.ContentPostReposi
 import com.github.garamflow.streamsettlement.service.cache.ViewCountCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,6 +14,7 @@ import java.util.Map;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "scheduler.enabled", havingValue = "true", matchIfMissing = true)
 public class ViewCountSyncScheduler {
 
     private final ContentPostRepository contentPostRepository;
@@ -25,16 +27,14 @@ public class ViewCountSyncScheduler {
     @Scheduled(cron = "5 * * * * *")
     @Transactional
     public void syncContentViewCountsToDatabase() {
-        String timeWindowKey = viewCountCacheService.generatePreviousMinuteViewCountKey();
-
-        Map<Long, Long> viewCounts = viewCountCacheService.fetchPreviousMinuteViewCounts(timeWindowKey);
+      String timeWindowKey = viewCountCacheService.generatePreviousMinuteViewCountKey();
+      Map<Long, Long> viewCounts = viewCountCacheService.fetchPreviousMinuteViewCounts(timeWindowKey);
 
         if (!viewCounts.isEmpty()) {
             try {
-                contentPostRepository.bulkUpdateViewCounts(viewCounts);
-                log.info("Updated view counts in database");
-                viewCountCacheService.deleteProcessedKeys(timeWindowKey);
-                log.info("Deleted processed Redis keys");
+              contentPostRepository.bulkUpdateViewCounts(viewCounts);
+              viewCountCacheService.deleteProcessedKeys(timeWindowKey);
+              log.info("Synced {} content view counts to database", viewCounts.size());
             } catch (Exception e) {
                 log.error("Failed to sync view counts to database", e);
                 throw new RuntimeException("Error syncing view counts", e);

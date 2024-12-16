@@ -1,7 +1,6 @@
 package com.github.garamflow.streamsettlement.batch.partition;
 
-import com.github.garamflow.streamsettlement.batch.config.BatchProperties;
-import com.github.garamflow.streamsettlement.repository.statistics.ContentStatisticsRepository;
+import com.github.garamflow.streamsettlement.repository.statistics.ContentStatisticsQuerydslRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,13 +23,7 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class SettlementPartitionerTest {
     @Mock
-    private ContentStatisticsRepository contentStatisticsRepository;
-
-    @Mock
-    private BatchProperties batchProperties;
-
-    @Mock
-    private BatchProperties.Partition partition;
+    private ContentStatisticsQuerydslRepository contentStatisticsQuerydslRepository;
 
     @InjectMocks
     private SettlementPartitioner partitioner;
@@ -39,111 +32,124 @@ class SettlementPartitionerTest {
 
     @BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(partitioner, "targetDate", targetDate.toString());
-    }
-
-    @Test
-    @DisplayName("정산 통계 데이터가 있을 때 파티션 생성")
-    void createPartitionsWithData() {
-        // given
-        setupBatchProperties(100L);  // 중간 크기 데이터 설정
-        when(contentStatisticsRepository.findMinIdByStatisticsDate(targetDate)).thenReturn(1L);
-        when(contentStatisticsRepository.findMaxIdByStatisticsDate(targetDate)).thenReturn(100L);
-
-        // when
-        Map<String, ExecutionContext> result = partitioner.partition(4);
-
-        // then
-        assertThat(result).hasSize(8)
-                .containsKeys(
-                        "settlement-partition1",
-                        "settlement-partition2",
-                        "settlement-partition3",
-                        "settlement-partition4",
-                        "settlement-partition5",
-                        "settlement-partition6",
-                        "settlement-partition7",
-                        "settlement-partition8"
-                )
-                .allSatisfy((key, context) -> {
-                    assertThat(context.getLong("startStatisticsId")).isGreaterThanOrEqualTo(1L);
-                    assertThat(context.getLong("endStatisticsId")).isLessThanOrEqualTo(100L);
-                    assertThat(context.getString("targetDate")).isEqualTo(targetDate.toString());
-                });
-    }
-
-    @Test
-    @DisplayName("파티션 범위가 올바르게 계산되는지 확인")
-    void verifyPartitionRanges() {
-        // given
-        setupBatchProperties(100L);  // 중간 크기 데이터 설정
-        when(contentStatisticsRepository.findMinIdByStatisticsDate(targetDate)).thenReturn(1L);
-        when(contentStatisticsRepository.findMaxIdByStatisticsDate(targetDate)).thenReturn(100L);
-
-        // when
-        Map<String, ExecutionContext> result = partitioner.partition(4);
-
-        // then
-        ExecutionContext partition1 = result.get("settlement-partition1");
-        ExecutionContext partition8 = result.get("settlement-partition8");
-
-        assertThat(partition1.getLong("startStatisticsId")).isEqualTo(1L);
-        assertThat(partition1.getLong("endStatisticsId")).isEqualTo(13L);
-        assertThat(partition8.getLong("startStatisticsId")).isEqualTo(92L);
-        assertThat(partition8.getLong("endStatisticsId")).isEqualTo(100L);
-    }
-
-    @Test
-    @DisplayName("단일 파티션 생성 (데이터가 적을 때)")
-    void createSinglePartition() {
-        // given
-        setupBatchProperties(2L);  // 작은 크기 데이터 설정
-        when(contentStatisticsRepository.findMinIdByStatisticsDate(targetDate)).thenReturn(1L);
-        when(contentStatisticsRepository.findMaxIdByStatisticsDate(targetDate)).thenReturn(2L);
-
-        // when
-        Map<String, ExecutionContext> result = partitioner.partition(4);
-
-        // then
-        assertThat(result).hasSize(1)
-                .containsKey("settlement-partition1")
-                .satisfies(map -> {
-                    ExecutionContext context = map.get("settlement-partition1");
-                    assertThat(context.getLong("startStatisticsId")).isEqualTo(1L);
-                    assertThat(context.getLong("endStatisticsId")).isEqualTo(2L);
-                    assertThat(context.getString("targetDate")).isEqualTo(targetDate.toString());
-                });
+        ReflectionTestUtils.setField(partitioner, "targetDate", targetDate);
     }
 
     @Test
     @DisplayName("데이터가 없을 때 빈 파티션 생성")
     void createEmptyPartitionWhenNoData() {
         // given
-        when(contentStatisticsRepository.findMinIdByStatisticsDate(targetDate)).thenReturn(0L);
-        when(contentStatisticsRepository.findMaxIdByStatisticsDate(targetDate)).thenReturn(0L);
+        when(contentStatisticsQuerydslRepository.findMinIdByStatisticsDate(targetDate)).thenReturn(0L);
+        when(contentStatisticsQuerydslRepository.findMaxIdByStatisticsDate(targetDate)).thenReturn(0L);
 
         // when
         Map<String, ExecutionContext> result = partitioner.partition(4);
 
         // then
-        assertThat(result).hasSize(1)
+        assertThat(result)
+                .hasSize(1)
                 .containsKey("settlement-partition0")
                 .satisfies(map -> {
                     ExecutionContext context = map.get("settlement-partition0");
-                    assertThat(context.getLong("startStatisticsId")).isEqualTo(0L);
-                    assertThat(context.getLong("endStatisticsId")).isEqualTo(0L);
+                    assertThat(context.getLong("startStatisticsId")).isZero();
+                    assertThat(context.getLong("endStatisticsId")).isZero();
                     assertThat(context.getString("targetDate")).isEqualTo(targetDate.toString());
                 });
     }
 
-    private void setupBatchProperties(long dataSize) {
-        when(batchProperties.getPartition()).thenReturn(partition);
-        when(partition.getSmallDataSize()).thenReturn(10L);
-        when(partition.getMediumDataSize()).thenReturn(100L);
-        when(partition.getLargeDataSize()).thenReturn(1000L);
-        when(partition.getSmallGridSize()).thenReturn(1);
-        when(partition.getMediumGridSize()).thenReturn(4);
-        when(partition.getLargeGridSize()).thenReturn(8);
-        when(partition.getExtraLargeGridSize()).thenReturn(16);
+    @Test
+    @DisplayName("소량 데이터일 때 파티션 생성")
+    void createPartitionsForSmallData() {
+        // given
+        when(contentStatisticsQuerydslRepository.findMinIdByStatisticsDate(targetDate)).thenReturn(1L);
+        when(contentStatisticsQuerydslRepository.findMaxIdByStatisticsDate(targetDate)).thenReturn(5L);
+
+        // when
+        Map<String, ExecutionContext> result = partitioner.partition(4);
+
+        // then
+        assertThat(result)
+                .hasSize(3)
+                .containsKeys(
+                        "settlement-partition1",
+                        "settlement-partition2",
+                        "settlement-partition3"
+                )
+                .satisfies(map -> {
+                    // 첫 번째 파티션 검증
+                    ExecutionContext firstPartition = map.get("settlement-partition1");
+                    assertThat(firstPartition.getLong("startStatisticsId")).isEqualTo(1L);
+                    assertThat(firstPartition.getLong("endStatisticsId")).isEqualTo(2L);
+
+                    // 두 번째 파티션 검증
+                    ExecutionContext secondPartition = map.get("settlement-partition2");
+                    assertThat(secondPartition.getLong("startStatisticsId")).isEqualTo(3L);
+                    assertThat(secondPartition.getLong("endStatisticsId")).isEqualTo(4L);
+
+                    // 세 번째 파티션 검증
+                    ExecutionContext thirdPartition = map.get("settlement-partition3");
+                    assertThat(thirdPartition.getLong("startStatisticsId")).isEqualTo(5L);
+                    assertThat(thirdPartition.getLong("endStatisticsId")).isEqualTo(5L);
+
+                    // 모든 파티션의 targetDate 검증
+                    assertThat(map.values())
+                            .allSatisfy(context ->
+                                    assertThat(context.getString("targetDate")).isEqualTo(targetDate.toString())
+                            );
+                });
+    }
+
+    @Test
+    @DisplayName("대량 데이터일 때 다중 파티션 생성")
+    void createMultiplePartitionsForLargeData() {
+        // given
+        when(contentStatisticsQuerydslRepository.findMinIdByStatisticsDate(targetDate)).thenReturn(1L);
+        when(contentStatisticsQuerydslRepository.findMaxIdByStatisticsDate(targetDate)).thenReturn(100L);
+
+        // when
+        Map<String, ExecutionContext> result = partitioner.partition(4);
+
+        // then
+        assertThat(result)
+                .hasSize(4)
+                .containsKeys(
+                        "settlement-partition1",
+                        "settlement-partition2",
+                        "settlement-partition3",
+                        "settlement-partition4"
+                )
+                .allSatisfy((key, context) -> {
+                    assertThat(context.getLong("startStatisticsId")).isGreaterThanOrEqualTo(1L);
+                    assertThat(context.getLong("endStatisticsId")).isLessThanOrEqualTo(100L);
+                    assertThat(context.getString("targetDate")).isEqualTo(targetDate.toString());
+                });
+
+        // 파티션 범위 검증
+        ExecutionContext firstPartition = result.get("settlement-partition1");
+        ExecutionContext lastPartition = result.get("settlement-partition4");
+
+        assertThat(firstPartition.getLong("startStatisticsId")).isEqualTo(1L);
+        assertThat(firstPartition.getLong("endStatisticsId")).isEqualTo(25L);
+        assertThat(lastPartition.getLong("startStatisticsId")).isEqualTo(76L);
+        assertThat(lastPartition.getLong("endStatisticsId")).isEqualTo(100L);
+    }
+
+    @Test
+    @DisplayName("파티션 크기가 1 이상인지 확인")
+    void ensureMinimumPartitionSize() {
+        // given
+        when(contentStatisticsQuerydslRepository.findMinIdByStatisticsDate(targetDate)).thenReturn(1L);
+        when(contentStatisticsQuerydslRepository.findMaxIdByStatisticsDate(targetDate)).thenReturn(2L);
+
+        // when
+        Map<String, ExecutionContext> result = partitioner.partition(4);
+
+        // then
+        assertThat(result.values())
+                .allSatisfy(context -> {
+                    long start = context.getLong("startStatisticsId");
+                    long end = context.getLong("endStatisticsId");
+                    assertThat(end - start + 1).isGreaterThanOrEqualTo(1);
+                });
     }
 } 

@@ -13,7 +13,11 @@ import java.util.Optional;
 @Getter
 @Entity
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "content_statistics")
+@Table(name = "content_statistics",
+indexes = {
+  @Index(name = "idx_content_statistics_id_date", 
+         columnList = "content_statistics_id, statistics_date")
+})
 public class ContentStatistics {
 
     @Id
@@ -30,7 +34,7 @@ public class ContentStatistics {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "period", nullable = false)
-    private StatisticsPeriod period; // DAILY, WEEKLY, MONTHLY, YEARLY
+    private StatisticsPeriod period;
 
     @Column(name = "view_count", nullable = false)
     private Long viewCount = 0L;
@@ -41,31 +45,35 @@ public class ContentStatistics {
     @Column(name = "accumulated_views", nullable = false)
     private Long accumulatedViews = 0L;
 
-    @Builder(builderMethodName = "customBuilder")
-    private ContentStatistics(ContentPost contentPost, LocalDate statisticsDate,
-                              StatisticsPeriod period, Long viewCount, Long watchTime,
-                              Long accumulatedViews) {
+    @Builder(builderMethodName = "createBuilder")
+    private ContentStatistics(ContentPost contentPost, 
+                            LocalDate statisticsDate,
+                            StatisticsPeriod period, 
+                            Long viewCount, 
+                            Long watchTime) {
         this.contentPost = contentPost;
         this.statisticsDate = statisticsDate;
         this.period = period;
         this.viewCount = viewCount != null ? viewCount : 0L;
         this.watchTime = watchTime != null ? watchTime : 0L;
-        this.accumulatedViews = accumulatedViews != null ? 
-                               accumulatedViews : 
-                               Optional.ofNullable(contentPost.getTotalViews()).orElse(0L);
+        this.accumulatedViews = Optional.ofNullable(contentPost.getTotalViews()).orElse(0L);
     }
 
-    @Override
-    public String toString() {
-        return String.format(
-                "ContentStatistics(id=%d, contentPostId=%d, period=%s, statisticsDate=%s, viewCount=%d, watchTime=%d)",
-                id,
-                contentPost.getId(),
-                period,
-                statisticsDate,
-                viewCount,
-                watchTime
-        );
+    @Builder(builderMethodName = "existingBuilder")
+    private ContentStatistics(Long id,
+                            ContentPost contentPost,
+                            LocalDate statisticsDate,
+                            StatisticsPeriod period,
+                            Long viewCount,
+                            Long watchTime,
+                            Long accumulatedViews) {
+        this.id = id;
+        this.contentPost = contentPost;
+        this.statisticsDate = statisticsDate;
+        this.period = period;
+        this.viewCount = viewCount;
+        this.watchTime = watchTime;
+        this.accumulatedViews = accumulatedViews;
     }
 
     public void addDailyStats(long additionalViews, long additionalWatchTime) {
@@ -80,5 +88,18 @@ public class ContentStatistics {
 
     public void addWatchTime(Long watchTime) {
         this.watchTime += watchTime;
+    }
+
+    @Override
+    public String toString() {
+        return String.format(
+                "ContentStatistics(id=%d, contentPostId=%d, period=%s, statisticsDate=%s, viewCount=%d, watchTime=%d)",
+                id,
+                contentPost.getId(),
+                period,
+                statisticsDate,
+                viewCount,
+                watchTime
+        );
     }
 }

@@ -1,4 +1,4 @@
-package com.github.garamflow.streamsettlement.controller.dto.stream.response;
+package com.github.garamflow.streamsettlement.controller.dto.statistics;
 
 import com.github.garamflow.streamsettlement.entity.statistics.ContentStatistics;
 

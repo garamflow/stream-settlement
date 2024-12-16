@@ -16,13 +16,13 @@ import java.util.List;
 @Component
 @StepScope
 @RequiredArgsConstructor
-public class DailyLogWriter implements ItemWriter<List<ContentStatistics>> {
+public class StatisticsItemWriter implements ItemWriter<ContentStatistics> {
     private final ContentStatisticsRepository contentStatisticsRepository;
 
     @Override
-    public void write(@NonNull Chunk<? extends List<ContentStatistics>> chunk) throws Exception {
+    public void write(@NonNull Chunk<? extends ContentStatistics> chunk) {
         List<ContentStatistics> statistics = chunk.getItems().stream()
-                .flatMap(List::stream)
+                .map(item -> (ContentStatistics) item)
                 .toList();
         contentStatisticsRepository.bulkInsertStatistics(statistics);
     }

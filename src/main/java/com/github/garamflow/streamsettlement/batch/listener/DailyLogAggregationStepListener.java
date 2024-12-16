@@ -1,6 +1,6 @@
 package com.github.garamflow.streamsettlement.batch.listener;
 
-import com.github.garamflow.streamsettlement.repository.log.DailyWatchedContentQueryRepository;
+import com.github.garamflow.streamsettlement.repository.log.DailyWatchedContentQuerydslRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.ExitStatus;
@@ -15,7 +15,7 @@ import java.time.LocalDate;
 @RequiredArgsConstructor
 public class DailyLogAggregationStepListener implements StepExecutionListener {
 
-    private final DailyWatchedContentQueryRepository dailyWatchedContentQueryRepository;
+    private final DailyWatchedContentQuerydslRepository dailyWatchedContentQuerydslRepository;
 
     private LocalDate targetDate;
 

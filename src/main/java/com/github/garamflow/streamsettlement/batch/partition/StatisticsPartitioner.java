@@ -1,7 +1,7 @@
 package com.github.garamflow.streamsettlement.batch.partition;
 
 import com.github.garamflow.streamsettlement.batch.config.BatchProperties;
-import com.github.garamflow.streamsettlement.repository.log.DailyWatchedContentQueryRepository;
+import com.github.garamflow.streamsettlement.repository.log.DailyWatchedContentQuerydslRepository;
 import com.github.garamflow.streamsettlement.service.cache.DailyStreamingContentCacheService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -22,45 +22,50 @@ import java.util.Set;
 @Component
 @StepScope
 @RequiredArgsConstructor
-public class DailyLogPartitioner implements Partitioner {
+public class StatisticsPartitioner implements Partitioner {
+
     private final DailyStreamingContentCacheService dailyStreamingContentCacheService;
-    private final DailyWatchedContentQueryRepository dailyWatchedContentQueryRepository;
+    private final DailyWatchedContentQuerydslRepository dailyWatchedContentQuerydslRepository;
     private final BatchProperties batchProperties;
 
     @Value("#{jobParameters['targetDate']}")
     private LocalDate targetDate;
 
-    private static final Logger log = LoggerFactory.getLogger(DailyLogPartitioner.class);
+    private static final Logger log = LoggerFactory.getLogger(StatisticsPartitioner.class);
 
     @Override
     @NonNull
     public Map<String, ExecutionContext> partition(int gridSize) {
         Set<Long> contentIds = dailyStreamingContentCacheService.getContentIdsByDate(targetDate);
 
+        Long minId;
+        Long maxId;
+
         if (contentIds.isEmpty()) {
-            Long minId = dailyWatchedContentQueryRepository.findMinIdByWatchedDate(targetDate);
-            Long maxId = dailyWatchedContentQueryRepository.findMaxIdByWatchedDate(targetDate);
+            // contentIds 가 비어있으면 DB 에서 min/max 조회
+            minId = dailyWatchedContentQuerydslRepository.findMinIdByWatchedDate(targetDate);
+            maxId = dailyWatchedContentQuerydslRepository.findMaxIdByWatchedDate(targetDate);
 
             if (minId == null || maxId == null) {
                 log.warn("No streamed content found for date: {}", targetDate);
                 return createEmptyPartition();
             }
-
-            int adjustedGridSize = determineGridSize((int) (maxId - minId + 1));
-            long partitionSize = (maxId - minId) / adjustedGridSize + 1;
-            return createPartitions(minId, maxId, partitionSize);
+        } else {
+            // contentIds 기반 min/max
+            minId = Collections.min(contentIds);
+            maxId = Collections.max(contentIds);
         }
 
-        Long minId = Collections.min(contentIds);
-        Long maxId = Collections.max(contentIds);
-        int adjustedGridSize = determineGridSize(contentIds.size());
-        long partitionSize = (maxId - minId) / adjustedGridSize + 1;
+        int dataSize = (int) (maxId - minId + 1);
+        int adjustedGridSize = determineGridSize(dataSize);
+        long partitionSize = calculatePartitionSize(minId, maxId, adjustedGridSize);
 
         return createPartitions(minId, maxId, partitionSize);
     }
 
     private int determineGridSize(int dataSize) {
         BatchProperties.Partition partition = batchProperties.getPartition();
+        // 데이터량에 따라 파티션 수 결정
         if (dataSize < partition.getSmallDataSize()) {
             return partition.getSmallGridSize();
         } else if (dataSize < partition.getMediumDataSize()) {
@@ -71,24 +76,22 @@ public class DailyLogPartitioner implements Partitioner {
         return partition.getExtraLargeGridSize();
     }
 
+    private long calculatePartitionSize(long minId, long maxId, int gridSize) {
+        // 파티션 수(gridSize)에 따라 각 파티션 크기 동적 결정
+        return (maxId - minId) / gridSize + 1;
+    }
+
     private Map<String, ExecutionContext> createPartitions(long minId, long maxId, long partitionSize) {
         Map<String, ExecutionContext> partitions = new HashMap<>();
         int partitionNumber = 1;
-        long currentPartitionStartId = minId;
-        long currentPartitionEndId = currentPartitionStartId + partitionSize - 1;
 
-        while (currentPartitionStartId <= maxId) {
-            currentPartitionEndId = Math.min(currentPartitionEndId, maxId);
+        for (long startId = minId; startId <= maxId; startId += partitionSize) {
+            long endId = Math.min(startId + partitionSize - 1, maxId);
 
             ExecutionContext context = new ExecutionContext();
-            context.putLong("startContentId", currentPartitionStartId);
-            context.putLong("endContentId", currentPartitionEndId);
-
-            partitions.put(String.format("partition%d", partitionNumber), context);
-
-            currentPartitionStartId += partitionSize;
-            currentPartitionEndId += partitionSize;
-            partitionNumber++;
+            context.putLong("startContentId", startId);
+            context.putLong("endContentId", endId);
+            partitions.put("partition" + partitionNumber++, context);
         }
 
         return partitions;

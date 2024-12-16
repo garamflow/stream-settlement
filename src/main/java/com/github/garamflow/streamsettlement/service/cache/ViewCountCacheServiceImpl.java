@@ -14,6 +14,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import static com.github.garamflow.streamsettlement.redis.constant.RedisKeyConstants.VIEW_COUNT_KEY_PREFIX;
 
@@ -34,6 +35,8 @@ public class ViewCountCacheServiceImpl implements ViewCountCacheService {
         // contentId가 없으면 자동으로 0으로 초기화한 후 1 증가, 있으면 기존 값에 1 증가
         HashOperations<String, String, String> hashOps = redisTemplate.opsForHash();
         hashOps.increment(key, String.valueOf(contentId), 1L);
+
+        redisTemplate.expire(key, 5, TimeUnit.MINUTES);
     }
 
     /**

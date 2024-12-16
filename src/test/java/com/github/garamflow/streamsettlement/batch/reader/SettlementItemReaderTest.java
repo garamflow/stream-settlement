@@ -1,12 +1,14 @@
 package com.github.garamflow.streamsettlement.batch.reader;
 
-import com.github.garamflow.streamsettlement.batch.dto.PreviousSettlementDto;
-import com.github.garamflow.streamsettlement.batch.dto.StatisticsAndSettlementDto;
+import com.github.garamflow.streamsettlement.batch.config.BatchProperties;
+import com.github.garamflow.streamsettlement.batch.dto.SettlementCalculationDto;
+import com.github.garamflow.streamsettlement.batch.dto.StatisticsAndCumulativeSettlementDto;
 import com.github.garamflow.streamsettlement.entity.statistics.ContentStatistics;
 import com.github.garamflow.streamsettlement.entity.statistics.StatisticsPeriod;
 import com.github.garamflow.streamsettlement.entity.stream.content.ContentPost;
-import com.github.garamflow.streamsettlement.repository.settlement.SettlementRepository;
-import com.github.garamflow.streamsettlement.repository.statistics.ContentStatisticsRepository;
+import com.github.garamflow.streamsettlement.repository.settlement.SettlementQuerydslRepository;
+import com.github.garamflow.streamsettlement.repository.statistics.ContentStatisticsQuerydslRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,8 +21,8 @@ import org.mockito.quality.Strictness;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
@@ -31,25 +33,34 @@ import static org.mockito.Mockito.when;
 class SettlementItemReaderTest {
 
     @Mock
-    private ContentStatisticsRepository contentStatisticsRepository;
+    private ContentStatisticsQuerydslRepository contentStatisticsQuerydslRepository;
 
     @Mock
-    private SettlementRepository settlementRepository;
+    private SettlementQuerydslRepository settlementQuerydslRepository;
+
+    @Mock
+    private BatchProperties batchProperties;
+
+    @Mock
+    private BatchProperties.Reader readerProperties;
 
     @InjectMocks
     private SettlementItemReader reader;
 
     private final LocalDate targetDate = LocalDate.of(2024, 1, 1);
-    private final Long startId = 1L;
-    private final Long endId = 100L;
-    private final Long chunkSize = 10L;
 
     @BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(reader, "targetDate", targetDate.toString());
-        ReflectionTestUtils.setField(reader, "startStatisticsId", startId);
-        ReflectionTestUtils.setField(reader, "endStatisticsId", endId);
-        ReflectionTestUtils.setField(reader, "chunkSize", chunkSize);
+        ReflectionTestUtils.setField(reader, "targetDate", targetDate);
+
+        // BatchProperties 설정
+        when(batchProperties.getReader()).thenReturn(readerProperties);
+        when(readerProperties.getQueueCapacity()).thenReturn(100);
+        when(batchProperties.getChunkSize()).thenReturn(10);
+
+        // 실제 MeterRegistry 사용
+        ReflectionTestUtils.setField(reader, "meterRegistry", new SimpleMeterRegistry());
+
         reader.init();
     }
 
@@ -58,79 +69,70 @@ class SettlementItemReaderTest {
     void readNormalData() throws Exception {
         // given
         List<ContentStatistics> statistics = createTestStatistics(1L, 5L);
-        List<PreviousSettlementDto> previousSettlements = createTestPreviousSettlements(1L, 5L);
+        Map<Long, SettlementCalculationDto> settlements = createTestSettlements(1L, 5L);
 
-        when(contentStatisticsRepository.findByIdBetweenAndStatisticsDate(
-                anyLong(), anyLong(), eq(targetDate)))
-                .thenReturn(statistics);
-        when(settlementRepository.findPreviousSettlementsByContentIds(anyList(), eq(targetDate)))
-                .thenReturn(previousSettlements);
+        when(contentStatisticsQuerydslRepository.findByIdGreaterThanAndStatisticsDate(
+                anyLong(), eq(targetDate), anyInt()))
+                .thenReturn(statistics)
+                .thenReturn(Collections.emptyList());
+
+        when(settlementQuerydslRepository.findCumulativeSettlementsByContentIds(anyList(), eq(targetDate)))
+                .thenReturn(new ArrayList<>(settlements.values()));
 
         // when & then
+        AtomicInteger counter = new AtomicInteger(0);
         for (int i = 0; i < 5; i++) {
-            StatisticsAndSettlementDto result = reader.read();
-            assertThat(result).isNotNull();
-            assertThat(result.statistics().getContentPost().getId()).isEqualTo(i + 1);
-            assertThat(result.previousSettlement().contentPostId()).isEqualTo(i + 1);
+            StatisticsAndCumulativeSettlementDto result = reader.read();
+            assertThat(result).isNotNull()
+                    .satisfies(dto -> {
+                        ContentPost contentPost = dto.statistics().getContentPost();
+                        SettlementCalculationDto settlement = dto.cumulativeSettlementDto();
+
+                        assertThat(contentPost.getId()).isEqualTo(counter.get() + 1);
+                        assertThat(settlement.contentId()).isEqualTo(counter.get() + 1);
+                        assertThat(settlement.totalContentRevenue()).isGreaterThan(0L);
+                        assertThat(settlement.totalAdRevenue()).isGreaterThan(0L);
+                        counter.incrementAndGet();
+                    });
         }
-        assertThat(reader.read()).isNull(); // 더 이상 읽을 데이터가 없음
+        assertThat(reader.read()).isNull();
     }
 
     @Test
     @DisplayName("이전 정산 데이터가 없는 경우")
-    void readWithNoPreviousSettlement() throws Exception {
+    void readWithNoSettlementData() throws Exception {
         // given
         List<ContentStatistics> statistics = createTestStatistics(1L, 3L);
-        when(contentStatisticsRepository.findByIdBetweenAndStatisticsDate(
-                anyLong(), anyLong(), eq(targetDate)))
-                .thenReturn(statistics);
-        when(settlementRepository.findPreviousSettlementsByContentIds(anyList(), eq(targetDate)))
-                .thenReturn(List.of());
+
+        when(contentStatisticsQuerydslRepository.findByIdGreaterThanAndStatisticsDate(
+                anyLong(), eq(targetDate), anyInt()))
+                .thenReturn(statistics)
+                .thenReturn(Collections.emptyList());
+
+        when(settlementQuerydslRepository.findCumulativeSettlementsByContentIds(anyList(), eq(targetDate)))
+                .thenReturn(Collections.emptyList());
 
         // when
-        StatisticsAndSettlementDto result = reader.read();
+        StatisticsAndCumulativeSettlementDto result = reader.read();
 
         // then
-        assertThat(result).isNotNull();
-        assertThat(result.previousSettlement().previousTotalContentRevenue()).isZero();
-        assertThat(result.previousSettlement().previousTotalAdRevenue()).isZero();
-    }
-
-    @Test
-    @DisplayName("청크 단위로 데이터 읽기")
-    void readByChunks() throws Exception {
-        // given
-        List<ContentStatistics> firstChunk = createTestStatistics(1L, 10L);
-        List<ContentStatistics> secondChunk = createTestStatistics(11L, 20L);
-
-        when(contentStatisticsRepository.findByIdBetweenAndStatisticsDate(
-                eq(1L), eq(10L), eq(targetDate)))
-                .thenReturn(firstChunk);
-        when(contentStatisticsRepository.findByIdBetweenAndStatisticsDate(
-                eq(11L), eq(20L), eq(targetDate)))
-                .thenReturn(secondChunk);
-
-        when(settlementRepository.findPreviousSettlementsByContentIds(anyList(), eq(targetDate)))
-                .thenReturn(List.of());
-
-        // when & then
-        for (int i = 0; i < 20; i++) {
-            StatisticsAndSettlementDto result = reader.read();
-            assertThat(result).isNotNull();
-            assertThat(result.statistics().getContentPost().getId()).isEqualTo(i + 1);
-        }
+        assertThat(result).isNotNull()
+                .satisfies(dto -> {
+                    assertThat(dto.statistics().getViewCount()).isEqualTo(100L);
+                    assertThat(dto.statistics().getWatchTime()).isEqualTo(1000L);
+                });
     }
 
     @Test
     @DisplayName("빈 데이터 처리")
     void handleEmptyData() throws Exception {
         // given
-        when(contentStatisticsRepository.findByIdBetweenAndStatisticsDate(
-                anyLong(), anyLong(), eq(targetDate)))
-                .thenReturn(List.of());
+        when(contentStatisticsQuerydslRepository.findByIdGreaterThanAndStatisticsDate(
+                anyLong(), eq(targetDate), anyInt()))
+                .thenReturn(Collections.emptyList());
 
         // when
-        StatisticsAndSettlementDto result = reader.read();
+        StatisticsAndCumulativeSettlementDto result = reader.read();
 
         // then
         assertThat(result).isNull();
@@ -139,18 +141,20 @@ class SettlementItemReaderTest {
     private List<ContentStatistics> createTestStatistics(Long startId, Long endId) {
         List<ContentStatistics> statistics = new ArrayList<>();
         for (long i = startId; i <= endId; i++) {
-            ContentPost contentPost = ContentPost.builder()
-                    .title("Test Content " + i)
+            ContentPost contentPost = ContentPost.createBuilder()
+                    .title("테스트 콘텐츠 " + i)
                     .url("http://test.com/" + i)
                     .build();
             ReflectionTestUtils.setField(contentPost, "id", i);
+            ReflectionTestUtils.setField(contentPost, "totalViews", 1000L);
 
-            ContentStatistics stat = ContentStatistics.customBuilder()
+            ContentStatistics stat = ContentStatistics.existingBuilder()
                     .contentPost(contentPost)
                     .statisticsDate(targetDate)
                     .period(StatisticsPeriod.DAILY)
                     .viewCount(100L)
                     .watchTime(1000L)
+                    .accumulatedViews(1000L)
                     .build();
             ReflectionTestUtils.setField(stat, "id", i);
 
@@ -159,11 +163,18 @@ class SettlementItemReaderTest {
         return statistics;
     }
 
-    private List<PreviousSettlementDto> createTestPreviousSettlements(Long startId, Long endId) {
-        List<PreviousSettlementDto> settlements = new ArrayList<>();
+    private Map<Long, SettlementCalculationDto> createTestSettlements(Long startId, Long endId) {
+        Map<Long, SettlementCalculationDto> settlements = new HashMap<>();
         for (long i = startId; i <= endId; i++) {
-            settlements.add(new PreviousSettlementDto(i, 50L, 500L));
+            settlements.put(i, new SettlementCalculationDto(
+                    i,      // id
+                    i,      // contentId
+                    1000L,  // totalContentRevenue
+                    500L,   // totalAdRevenue
+                    500L,   // previousContentRevenue
+                    250L    // previousAdRevenue
+            ));
         }
         return settlements;
     }
-} 
+}

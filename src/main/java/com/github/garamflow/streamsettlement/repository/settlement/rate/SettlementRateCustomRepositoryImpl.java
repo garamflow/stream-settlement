@@ -1,4 +1,4 @@
-package com.github.garamflow.streamsettlement.repository.settlement;
+package com.github.garamflow.streamsettlement.repository.settlement.rate;
 
 import com.github.garamflow.streamsettlement.entity.settlement.SettlementRate;
 import com.github.garamflow.streamsettlement.entity.settlement.SettlementType;

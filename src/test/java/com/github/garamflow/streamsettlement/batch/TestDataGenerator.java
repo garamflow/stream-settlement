@@ -1,32 +1,14 @@
 package com.github.garamflow.streamsettlement.batch;
 
-import com.github.garamflow.streamsettlement.entity.member.Member;
-import com.github.garamflow.streamsettlement.entity.member.Role;
-import com.github.garamflow.streamsettlement.entity.settlement.SettlementType;
-import com.github.garamflow.streamsettlement.entity.stream.Log.StreamingStatus;
-import com.github.garamflow.streamsettlement.entity.stream.advertisement.Advertisement;
-import com.github.garamflow.streamsettlement.entity.stream.content.ContentPost;
-import com.github.garamflow.streamsettlement.entity.stream.content.ContentStatus;
-import com.github.garamflow.streamsettlement.repository.advertisement.AdvertisementRepository;
-import com.github.garamflow.streamsettlement.repository.member.MemberRepository;
-import com.github.garamflow.streamsettlement.repository.stream.ContentPostRepository;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.Async;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
-import java.sql.Types;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
-import java.util.concurrent.CompletableFuture;
+
 
 @Slf4j
 @Component
@@ -34,381 +16,445 @@ import java.util.concurrent.CompletableFuture;
 public class TestDataGenerator {
 
     private final JdbcTemplate jdbcTemplate;
-    private final MemberRepository memberRepository;
-    private final ContentPostRepository contentPostRepository;
-    private final AdvertisementRepository advertisementRepository;
+    @Getter
+    private int contentCount;
 
-    @Transactional
-    public void createTestData(
+    public void initialize() {
+        initializeProcedures();
+    }
+
+    public TestDataResult createTestData(TestDataConfig config, LocalDate targetDate) {
+        this.contentCount = config.contentCount();
+        try {
+            log.info("테스트 데이터 생성 시작 - {}", config);
+
+            jdbcTemplate.query(
+                    "CALL create_test_data(?, ?, ?, ?, ?, ?)",
+                    (RowCallbackHandler) rs -> {
+                        for (int i = 1; i <= rs.getMetaData().getColumnCount(); i++) {
+                            log.info("Data creation result: {}", rs.getString(i));
+                        }
+                    },
+                    config.memberCount(), config.contentCount(),
+                    config.adCount(), config.viewLogCount(),
+                    config.adViewLogCount(), targetDate
+            );
+
+            log.info("데이터 생성 결과 검증 시작");
+            
+            // 1. content_post 테이블 데이터 확인
+            Integer contentCount = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM content_post", Integer.class);
+            log.info("생성된 콘텐츠 수: {}", contentCount);
+
+            // 2. 실제 조인 결과 확인
+            Integer joinCount = jdbcTemplate.queryForObject("""
+                    SELECT COUNT(*) 
+                    FROM member m 
+                    CROSS JOIN content_post c 
+                    WHERE m.role = 'MEMBER' 
+                    LIMIT 5
+                    """, Integer.class);
+            log.info("멤버-콘텐츠 조인 결과 수: {}", joinCount);
+
+            // 3. member_content_watch_log의 content_post_id NULL 체크
+            Integer nullContentCount = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM member_content_watch_log WHERE content_post_id IS NULL",
+                    Integer.class);
+            log.info("content_post_id가 NULL인 시청 로그 수: {}", nullContentCount);
+
+            if (nullContentCount > 0) {
+                throw new RuntimeException("시청 로그에 content_post_id가 NULL인 레코드가 있습니다.");
+            }
+
+            return new TestDataResult(
+                    getCount("member"),
+                    getCount("content_post"),
+                    getCount("member_content_watch_log WHERE watched_date = ?", targetDate)
+            );
+        } catch (Exception e) {
+            log.error("테스트 데이터 생성 실패: {}", e.getMessage(), e);
+            throw new RuntimeException("테스트 데이터 생성 실패", e);
+        }
+    }
+
+    private Integer getCount(String table) {
+        return jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + table, Integer.class);
+    }
+
+    private Integer getCount(String table, Object... params) {
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM " + table,
+                Integer.class,
+                params
+        );
+    }
+
+    private void initializeProcedures() {
+        try {
+            log.info("저장 프로시저 초기화 시작");
+
+            // 기존 프로시저들 삭제
+            dropExistingProcedures();
+
+            // 프로시저 순차적 생성 (의존성 순서 고려)
+            createSettlementRatesProcedure();   // 1. 정산율 (독립적)
+            createMembersProcedure();           // 2. 회원 (독립적)
+            createContentPostsProcedure();      // 3. 콘텐츠 (회원 의존)
+            createAdvertisementsProcedure();    // 4. 광고 (회원 의존)
+            createContentAdMappingsProcedure(); // 5. 매핑 (콘텐츠, 광고 의존)
+            createViewLogsProcedure();          // 6. 로그 (콘텐츠 의존)
+            createMainProcedure();              // 7. 메인 (모든 프로시저 의존)
+
+            log.info("저장 프로시저 초기화 완료");
+        } catch (Exception e) {
+            log.error("저장 프로시저 초기화 중 오류 발생: {}", e.getMessage(), e);
+            throw new RuntimeException("저장 프로시저 초기화 실패", e);
+        }
+    }
+
+    private void dropExistingProcedures() {
+        String[] procedures = {
+                "create_test_data",
+                "create_settlement_rates",
+                "create_members",
+                "create_content_posts",
+                "create_advertisements",
+                "create_content_ad_mappings",
+                "create_view_logs"
+        };
+
+        for (String procedure : procedures) {
+            jdbcTemplate.execute("DROP PROCEDURE IF EXISTS " + procedure);
+        }
+    }
+
+    private void createMainProcedure() {
+        String sql = """
+                    CREATE PROCEDURE create_test_data(
+                        IN p_member_count INT,
+                        IN p_content_count INT,
+                        IN p_ad_count INT,
+                        IN p_view_log_count INT,
+                        IN p_ad_view_log_count INT,
+                        IN p_target_date DATE
+                    )
+                    BEGIN
+                        DECLARE start_time TIMESTAMP;
+                        SET start_time = NOW();
+                
+                        SET FOREIGN_KEY_CHECKS = 0;
+                
+                        -- 테이블 초기화 전 데이터 수 확인
+                        SELECT COUNT(*) INTO @pre_member FROM member;
+                        SELECT COUNT(*) INTO @pre_content FROM content_post;
+                
+                        TRUNCATE TABLE member_content_watch_log;
+                        TRUNCATE TABLE member_ad_watch_log;
+                        TRUNCATE TABLE daily_watched_content;
+                        TRUNCATE TABLE content_statistics;
+                        TRUNCATE TABLE advertisement_content_post;
+                        TRUNCATE TABLE advertisement;
+                        TRUNCATE TABLE content_post;
+                        TRUNCATE TABLE member;
+                        TRUNCATE TABLE settlement;
+                
+                        CALL create_settlement_rates();
+                        CALL create_members(p_member_count, 'CREATOR');
+                        CALL create_members(p_ad_count, 'MEMBER');
+                        CALL create_content_posts(p_content_count);
+                        CALL create_advertisements(p_ad_count);
+                        CALL create_content_ad_mappings(p_content_count, p_ad_count);
+                        CALL create_view_logs(p_view_log_count, p_target_date);
+                
+                        -- 생성된 데이터 수 확인
+                        SELECT COUNT(*) INTO @post_member FROM member;
+                        SELECT COUNT(*) INTO @post_content FROM content_post;
+                
+                        SET FOREIGN_KEY_CHECKS = 1;
+                
+                        -- 결과 출력
+                        SELECT
+                            CONCAT('Members created: ', @post_member),
+                            CONCAT('Contents created: ', @post_content),
+                            CONCAT('Total execution time: ',
+                                TIMESTAMPDIFF(SECOND, start_time, NOW()), ' seconds')
+                        AS execution_info;
+                    END
+                """;
+        jdbcTemplate.execute(sql);
+    }
+
+    private void createSettlementRatesProcedure() {
+        String sql = """
+                    CREATE PROCEDURE create_settlement_rates()
+                    BEGIN
+                        INSERT INTO settlement_rate 
+                        (settlement_type, min_views, max_views, rate, applied_at, created_at)
+                        VALUES 
+                        ('CONTENT', 0, 1000, 0.4, NOW(), NOW()),
+                        ('CONTENT', 1001, 5000, 0.5, NOW(), NOW()),
+                        ('CONTENT', 5001, NULL, 0.6, NOW(), NOW()),
+                        ('ADVERTISEMENT', 0, 1000, 0.3, NOW(), NOW()),
+                        ('ADVERTISEMENT', 1001, 5000, 0.4, NOW(), NOW()),
+                        ('ADVERTISEMENT', 5001, NULL, 0.5, NOW(), NOW());
+                    END
+                """;
+        jdbcTemplate.execute(sql);
+    }
+
+    private void createMembersProcedure() {
+        String sql = """
+                    CREATE PROCEDURE create_members(IN p_count INT, IN p_role VARCHAR(20))
+                    BEGIN
+                        DECLARE i INT DEFAULT 0;
+                        WHILE i < p_count DO
+                            INSERT INTO member (
+                                email, username, provider, provider_id, 
+                                role, created_at, updated_at
+                            ) VALUES (
+                                CONCAT(LOWER(p_role), i, '@test.com'),
+                                CONCAT(LOWER(p_role), i),
+                                'test',
+                                CONCAT('testId', i),
+                                p_role,
+                                NOW(),
+                                NOW()
+                            );
+                            SET i = i + 1;
+                        END WHILE;
+                    END
+                """;
+        jdbcTemplate.execute(sql);
+    }
+
+    private void createContentPostsProcedure() {
+        String sql = """
+                    CREATE PROCEDURE create_content_posts(IN p_count INT) 
+                    BEGIN
+                        DECLARE i INT DEFAULT 0;
+                        DECLARE creator_count INT;
+                
+                        SELECT COUNT(*) INTO creator_count 
+                        FROM member 
+                        WHERE role = 'CREATOR';
+                
+                        WHILE i < p_count DO
+                            INSERT INTO content_post (
+                                member_id, title, description, duration,
+                                total_views, total_watch_time, url, status,
+                                created_at, updated_at
+                            )
+                            VALUES (
+                                (SELECT member_id 
+                                 FROM member 
+                                 WHERE role = 'CREATOR' 
+                                 ORDER BY RAND() 
+                                 LIMIT 1),
+                                CONCAT('Content ', i),
+                                CONCAT('Description for content ', i),
+                                FLOOR(60 + RAND() * 540),
+                                0,
+                                0,
+                                CONCAT('https://example.com/video/', i),
+                                'ACTIVE',
+                                NOW(),
+                                NOW()
+                            );
+                            SET i = i + 1;
+                        END WHILE;
+                    END
+                """;
+        jdbcTemplate.execute(sql);
+    }
+
+    private void createAdvertisementsProcedure() {
+        String sql = """
+                    CREATE PROCEDURE create_advertisements(IN p_count INT)
+                    BEGIN
+                        DECLARE i INT DEFAULT 0;
+                
+                        WHILE i < p_count DO
+                            INSERT INTO advertisement (
+                                advertiser_id, title, description,
+                                price_per_view, total_views, created_at, updated_at
+                            )
+                            VALUES (
+                                (SELECT member_id 
+                                 FROM member 
+                                 WHERE role = 'MEMBER' 
+                                 ORDER BY RAND() 
+                                 LIMIT 1),
+                                CONCAT('Ad ', i),
+                                CONCAT('Ad Description ', i),
+                                100 + FLOOR(RAND() * 900),
+                                0,
+                                NOW(),
+                                NOW()
+                            );
+                            SET i = i + 1;
+                        END WHILE;
+                    END
+                """;
+        jdbcTemplate.execute(sql);
+    }
+
+    private void createContentAdMappingsProcedure() {
+        String sql = """
+                    CREATE PROCEDURE create_content_ad_mappings(
+                        IN p_content_count INT,
+                        IN p_ad_count INT
+                    )
+                    BEGIN
+                        DECLARE i INT DEFAULT 0;
+                        DECLARE j INT;
+                        DECLARE ad_limit INT;
+                
+                        WHILE i < p_content_count DO
+                            SET ad_limit = 1 + FLOOR(RAND() * 3);
+                            SET j = 0;
+                
+                            WHILE j < ad_limit DO
+                                INSERT INTO advertisement_content_post (
+                                    advertisement_id,
+                                    content_post_id
+                                )
+                                SELECT 
+                                    advertisement_id,
+                                    (
+                                        SELECT content_post_id 
+                                        FROM content_post 
+                                        ORDER BY content_post_id 
+                                        LIMIT i,1
+                                    )
+                                FROM (
+                                    SELECT advertisement_id 
+                                    FROM advertisement 
+                                    ORDER BY RAND() 
+                                    LIMIT 1
+                                ) AS random_ad;
+                
+                                SET j = j + 1;
+                            END WHILE;
+                
+                            SET i = i + 1;
+                        END WHILE;
+                    END
+                """;
+        jdbcTemplate.execute(sql);
+    }
+
+    private void createViewLogsProcedure() {
+        String sql = """
+                    CREATE PROCEDURE create_view_logs(
+                        IN p_count INT, IN p_target_date DATE
+                    )
+                    BEGIN
+                        DECLARE batch_size INT DEFAULT 1000;
+                        DECLARE i INT DEFAULT 0;
+                
+                        WHILE i < p_count DO
+                            -- 시청 로그 생성
+                            INSERT INTO member_content_watch_log (
+                                member_id, content_post_id, last_playback_position,
+                                total_playback_time, watched_date, streaming_status,
+                                created_at, updated_at
+                            )
+                            SELECT 
+                                m.member_id,
+                                c.content_post_id,
+                                300,
+                                250,
+                                p_target_date,
+                                'COMPLETED',
+                                NOW(),
+                                NOW()
+                            FROM member m
+                            CROSS JOIN content_post c
+                            WHERE m.role = 'MEMBER'
+                            ORDER BY RAND()
+                            LIMIT batch_size;
+                
+                            -- daily_watched_content 테이블에 데이터 삽입
+                            INSERT IGNORE INTO daily_watched_content (
+                                content_post_id, watched_date, created_at
+                            )
+                            SELECT 
+                                mcwl.content_post_id,
+                                mcwl.watched_date,
+                                NOW()
+                            FROM (
+                                SELECT DISTINCT content_post_id, watched_date
+                                FROM member_content_watch_log
+                                WHERE watched_date = p_target_date
+                                AND NOT EXISTS (
+                                    SELECT 1 
+                                    FROM daily_watched_content dwc 
+                                    WHERE dwc.content_post_id = member_content_watch_log.content_post_id
+                                    AND dwc.watched_date = member_content_watch_log.watched_date
+                                )
+                            ) mcwl;
+                
+                            -- 콘텐츠 조회수 업데이트
+                            UPDATE content_post c
+                            INNER JOIN (
+                                SELECT 
+                                    content_post_id, 
+                                    COUNT(*) as view_count
+                                FROM member_content_watch_log
+                                WHERE watched_date = p_target_date
+                                GROUP BY content_post_id
+                            ) l ON c.content_post_id = l.content_post_id
+                            SET 
+                                c.total_views = c.total_views + l.view_count,
+                                c.total_watch_time = c.total_watch_time + (l.view_count * 250);
+                
+                            SET i = i + batch_size;
+                        END WHILE;
+                    END
+                """;
+        jdbcTemplate.execute(sql);
+    }
+
+    public record TestDataConfig(
             int memberCount,
             int contentCount,
             int adCount,
             int viewLogCount,
             int adViewLogCount
     ) {
-        jdbcTemplate.execute("ALTER TABLE member_content_watch_log DISABLE KEYS");
-        jdbcTemplate.execute("ALTER TABLE member_ad_watch_log DISABLE KEYS");
-
-        try {
-            clearAllData();
-            log.info("데이터 생성 시작");
-
-            // 1. 정산율 생성
-            createSettlementRates();
-            log.info("정산율 생성 완료");
-
-            // 1. 회원 생성 (크리에이터 + 광고주)
-            List<Member> creators = createMembers(memberCount, Role.CREATOR);
-            List<Member> advertisers = createMembers(adCount, Role.MEMBER);
-            log.info("회원 생성 완료: 크리에이터 {}, 광고주 {}", memberCount, adCount);
-
-            // 2. 콘텐츠 생성
-            List<ContentPost> contents = createContentPosts(contentCount, creators);
-            log.info("콘텐츠 생성 완료: {}", contentCount);
-
-            // 3. 광고 생성
-            List<Advertisement> ads = createAdvertisements(adCount, advertisers);
-            log.info("광고 생성 완료: {}", adCount);
-
-            // 4. 콘텐츠-광고 매핑
-            createContentAdMappings(contents, ads);
-            log.info("콘텐츠-광고 매핑 완료");
-
-            // 5. 시청 로그 생성
-            createContentViewLogs(viewLogCount, contents, memberCount);
-            createAdViewLogs(adViewLogCount, contents, ads, memberCount);
-            log.info("시청 로그 생성 완료: 콘텐츠 {}, 광고 {}", viewLogCount, adViewLogCount);
-
-        } finally {
-            jdbcTemplate.execute("ALTER TABLE member_content_watch_log ENABLE KEYS");
-            jdbcTemplate.execute("ALTER TABLE member_ad_watch_log ENABLE KEYS");
-        }
     }
 
-    private void createContentAdMappings(List<ContentPost> contents, List<Advertisement> ads) {
-        // ads 리스���가 비어있을 때는 매핑 생성 건너뛰기
-        if (ads.isEmpty()) {
-            return;
-        }
+    public record TestDataResult(
+            int actualMembers,
+            int actualContents,
+            int actualViews
+    ) {
+    }
 
-        Random random = new Random();
-        for (ContentPost content : contents) {
-            int adCount = random.nextInt(3) + 1;
-            for (int i = 0; i < adCount; i++) {
-                Advertisement ad = ads.get(random.nextInt(ads.size()));
-                createAdvertisementContentPost(content, ad);
+    public void cleanupTables() {
+        log.info("테이블 초기화 시작");
+        String[] tables = {
+                "settlement",
+                "content_statistics",
+                "member_content_watch_log",
+                "advertisement_content_post",
+                "advertisement",
+                "content_post",
+                "member",
+                "settlement_rate"
+        };
+
+        jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 0");
+        for (String table : tables) {
+            try {
+                jdbcTemplate.execute("TRUNCATE TABLE " + table);
+            } catch (Exception e) {
+                log.warn("테이블 초기화 중 오류 발생 {}: {}", table, e.getMessage());
             }
         }
+        jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 1");
+        log.info("테이블 초기화 완료");
     }
 
-    private void createAdViewLogs(int count, List<ContentPost> contents, List<Advertisement> ads, int memberCount) {
-        if (count == 0) return;
-
-        String sql = "INSERT INTO member_ad_watch_log " +
-                "(member_id, content_post_id, advertisement_id, playback_position, " +
-                "watched_date, streaming_status, created_at) " +  // playback_time 제거
-                "VALUES (?, ?, ?, ?, ?, ?, NOW())";
-
-        int batchSize = 1000;
-        Random random = new Random();
-        LocalDate targetDate = LocalDate.now().minusDays(1);
-
-        for (int i = 0; i < count; i += batchSize) {
-            final int startIndex = i;
-            int currentBatch = Math.min(batchSize, count - i);
-
-            jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
-                @Override
-                public void setValues(PreparedStatement ps, int j) throws SQLException {
-                    ContentPost content = contents.get(random.nextInt(contents.size()));
-                    Advertisement ad = ads.get(random.nextInt(ads.size()));
-                    long memberId = random.nextInt(memberCount) + 1;
-                    int playbackPosition = random.nextInt(30) + 1;
-
-                    ps.setLong(1, memberId);
-                    ps.setLong(2, content.getId());
-                    ps.setLong(3, ad.getId());
-                    ps.setLong(4, playbackPosition);
-                    ps.setDate(5, java.sql.Date.valueOf(targetDate));
-                    ps.setString(6, StreamingStatus.COMPLETED.name());
-                }
-
-                @Override
-                public int getBatchSize() {
-                    return currentBatch;
-                }
-            });
-        }
-    }
-
-    private List<Member> createMembers(int count, Role role) {
-        List<Member> members = new ArrayList<>();
-        int batchSize = 1000;
-
-        for (int i = 0; i < count; i += batchSize) {
-            final int startIndex = i;
-            int currentBatch = Math.min(batchSize, count - i);
-            String sql = "INSERT INTO member (email, username, provider, provider_id, role, created_at, updated_at) " +
-                    "VALUES (?, ?, 'test', ?, ?, NOW(), NOW())";
-
-            jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
-                @Override
-                public void setValues(PreparedStatement ps, int j) throws SQLException {
-                    int idx = startIndex + j;
-                    ps.setString(1, role.name().toLowerCase() + idx + "@test.com");
-                    ps.setString(2, role.name().toLowerCase() + idx);
-                    ps.setString(3, "testId" + idx);
-                    ps.setString(4, role.name());
-                }
-
-                @Override
-                public int getBatchSize() {
-                    return currentBatch;
-                }
-            });
-        }
-
-        return memberRepository.findAll();
-    }
-
-    private List<Advertisement> createAdvertisements(int count, List<Member> advertisers) {
-        if (count == 0) return new ArrayList<>();
-
-        String sql = "INSERT INTO advertisement " +
-                "(advertiser_id, title, description, price_per_view, total_views, created_at, updated_at) " +
-                "VALUES (?, ?, ?, ?, 0, NOW(), NOW())";
-
-        Random random = new Random();
-
-        for (int i = 0; i < count; i++) {
-            Member advertiser = advertisers.get(i % advertisers.size());
-            jdbcTemplate.update(sql,
-                    advertiser.getId(),
-                    "Ad " + i,
-                    "Ad Description " + i,
-                    random.nextInt(1000) + 100L
-            );
-        }
-
-        return advertisementRepository.findAll();
-    }
-
-    private void createContentViewLogs(int count, List<ContentPost> contents, int memberCount) {
-        if (count == 0) return;
-
-        String insertSql = "INSERT INTO member_content_watch_log " +
-                "(member_id, content_post_id, last_playback_position, total_playback_time, " +
-                "watched_date, streaming_status, created_at) " +
-                "VALUES (?, ?, ?, ?, ?, ?, NOW())";
-
-        String updateSql = "UPDATE content_post " +
-                "SET total_views = total_views + 1, " +
-                "total_watch_time = total_watch_time + ? " +
-                "WHERE content_post_id = ?";
-
-        Random random = new Random();
-        LocalDate targetDate = LocalDate.now().minusDays(1);
-
-        // 각 콘텐츠별로 정확히 memberCount만큼의 시청 로그 생성
-        for (ContentPost content : contents) {
-            for (int i = 1; i <= memberCount; i++) {
-                // 시청 로그 생성
-                jdbcTemplate.update(insertSql,
-                        i,
-                        content.getId(),
-                        300L,
-                        250L,
-                        java.sql.Date.valueOf(targetDate),
-                        StreamingStatus.COMPLETED.name()
-                );
-
-                // 콘텐츠의 누적 조회수와 시청 시간 업데이트
-                jdbcTemplate.update(updateSql,
-                        250L,  // total_watch_time 증가량
-                        content.getId()
-                );
-            }
-        }
-    }
-
-    @Transactional
-    public void clearAllData() {
-        try {
-            log.info("테이블 초기화 시작");
-            jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 0");
-
-            // 로그 테이블 초기화
-            jdbcTemplate.execute("TRUNCATE TABLE member_content_watch_log");
-            jdbcTemplate.execute("TRUNCATE TABLE member_ad_watch_log");
-            jdbcTemplate.execute("TRUNCATE TABLE daily_watched_content");
-
-            // 통계 테이블 초기화
-            jdbcTemplate.execute("TRUNCATE TABLE content_statistics");
-
-            // 광고 관련 테이블 초기화
-            jdbcTemplate.execute("TRUNCATE TABLE advertisement_content_post");
-            jdbcTemplate.execute("TRUNCATE TABLE advertisement");
-
-            // 콘텐츠 및 회원 테이블 초기화
-            jdbcTemplate.execute("TRUNCATE TABLE content_post");
-            jdbcTemplate.execute("TRUNCATE TABLE member");
-
-            jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 1");
-            log.info("테이블 초기화 완료");
-        } catch (Exception e) {
-            log.error("데이터 초기화 중 오류 발생", e);
-            throw e;
-        }
-    }
-
-    @Transactional
-    public List<ContentPost> createTestContentPosts(int count) {
-        List<ContentPost> contentPosts = new ArrayList<>();
-
-        // 테스트용 Member 생성 - 이메일을 유크하게 생성
-        Member member = Member.builder()
-                .email("test" + System.currentTimeMillis() + "@test.com")
-                .username("testUser")
-                .provider("test")
-                .providerId("testId")
-                .role(Role.CREATOR)
-                .build();
-
-        memberRepository.save(member);
-
-        for (int i = 0; i < count; i++) {
-            ContentPost contentPost = ContentPost.builder()
-                    .member(member)
-                    .title("Test Content " + i)
-                    .url("http://test.com")
-                    .description("Test Description " + i)
-                    .totalViews(0L)
-                    .build();
-
-            contentPosts.add(contentPostRepository.save(contentPost));
-        }
-
-        return contentPosts;
-    }
-
-    @Async
-    public CompletableFuture<Void> createWatchLogsAsync(int start, int end) {
-        // 시청 로그 일부 생성
-        return CompletableFuture.completedFuture(null);
-    }
-
-    private List<ContentPost> createContentPosts(int count, List<Member> creators) {
-        if (count == 0) return new ArrayList<>();
-
-        int batchSize = 1000;
-        Random random = new Random();
-
-        for (int i = 0; i < count; i += batchSize) {
-            final int startIndex = i;
-            int currentBatch = Math.min(batchSize, count - i);
-            String sql = "INSERT INTO content_post " +
-                    "(member_id, title, description, duration, total_views, total_watch_time, url, status, created_at, updated_at) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
-
-            jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
-                @Override
-                public void setValues(PreparedStatement ps, int j) throws SQLException {
-                    int idx = startIndex + j;
-                    Member creator = creators.get(random.nextInt(creators.size()));
-                    int duration = random.nextInt(600) + 60; // 1~10분 사이 랜덤
-
-                    ps.setLong(1, creator.getId());
-                    ps.setString(2, "Content " + idx);
-                    ps.setString(3, "Description for content " + idx);
-                    ps.setInt(4, duration);
-                    ps.setLong(5, 0L); // total_views 초기값
-                    ps.setLong(6, 0L); // total_watch_time 초기값
-                    ps.setString(7, "https://example.com/video/" + idx);
-                    ps.setString(8, ContentStatus.ACTIVE.name());
-                }
-
-                @Override
-                public int getBatchSize() {
-                    return currentBatch;
-                }
-            });
-        }
-
-        return contentPostRepository.findAll();
-    }
-
-    private void createAdvertisementContentPost(ContentPost content, Advertisement ad) {
-        String sql = "INSERT INTO advertisement_content_post (content_post_id, advertisement_id) VALUES (?, ?)";
-        jdbcTemplate.update(sql, content.getId(), ad.getId());
-    }
-
-    private void createSettlementRates() {
-        String sql = "INSERT INTO settlement_rate " +
-                "(settlement_type, min_views, max_views, rate, applied_at, created_at) " +
-                "VALUES (?, ?, ?, ?, NOW(), NOW())";
-
-        // CONTENT 타입 정산율
-        jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
-            @Override
-            public void setValues(PreparedStatement ps, int i) throws SQLException {
-                switch (i) {
-                    case 0: // Tier 1
-                        ps.setString(1, SettlementType.CONTENT.name());
-                        ps.setLong(2, 0L);
-                        ps.setLong(3, 1000L);
-                        ps.setBigDecimal(4, BigDecimal.valueOf(0.4));
-                        break;
-                    case 1: // Tier 2
-                        ps.setString(1, SettlementType.CONTENT.name());
-                        ps.setLong(2, 1001L);
-                        ps.setLong(3, 5000L);
-                        ps.setBigDecimal(4, BigDecimal.valueOf(0.5));
-                        break;
-                    case 2: // Tier 3
-                        ps.setString(1, SettlementType.CONTENT.name());
-                        ps.setLong(2, 5001L);
-                        ps.setNull(3, Types.BIGINT);
-                        ps.setBigDecimal(4, BigDecimal.valueOf(0.6));
-                        break;
-                }
-            }
-
-            @Override
-            public int getBatchSize() {
-                return 3;
-            }
-        });
-
-        // ADVERTISEMENT 타입 정산율
-        jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
-            @Override
-            public void setValues(PreparedStatement ps, int i) throws SQLException {
-                switch (i) {
-                    case 0: // Tier 1
-                        ps.setString(1, SettlementType.ADVERTISEMENT.name());
-                        ps.setLong(2, 0L);
-                        ps.setLong(3, 1000L);
-                        ps.setBigDecimal(4, BigDecimal.valueOf(0.3));
-                        break;
-                    case 1: // Tier 2
-                        ps.setString(1, SettlementType.ADVERTISEMENT.name());
-                        ps.setLong(2, 1001L);
-                        ps.setLong(3, 5000L);
-                        ps.setBigDecimal(4, BigDecimal.valueOf(0.4));
-                        break;
-                    case 2: // Tier 3
-                        ps.setString(1, SettlementType.ADVERTISEMENT.name());
-                        ps.setLong(2, 5001L);
-                        ps.setNull(3, Types.BIGINT);
-                        ps.setBigDecimal(4, BigDecimal.valueOf(0.5));
-                        break;
-                }
-            }
-
-            @Override
-            public int getBatchSize() {
-                return 3;
-            }
-        });
-    }
 }

@@ -10,6 +10,7 @@ import org.springframework.batch.item.ItemWriter;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
@@ -21,11 +22,9 @@ public class SettlementItemWriter implements ItemWriter<Settlement> {
     private final SettlementRepository settlementRepository;
 
     @Override
-    public void write(@NonNull Chunk<? extends Settlement> chunk) throws Exception {
-        List<Settlement> settlements = chunk.getItems().stream()
-                .map(item -> (Settlement) item)
-                .toList();
+    public void write(@NonNull Chunk<? extends Settlement> chunk) {
+        List<Settlement> settlements = new ArrayList<>(chunk.getItems());
 
         settlementRepository.bulkInsertSettlement(settlements);
     }
-} 
+}
