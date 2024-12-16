@@ -4,9 +4,7 @@ import com.github.garamflow.streamsettlement.batch.dto.CumulativeStatisticsDto;
 import com.github.garamflow.streamsettlement.batch.dto.QCumulativeStatisticsDto;
 import com.github.garamflow.streamsettlement.entity.statistics.ContentStatistics;
 import com.github.garamflow.streamsettlement.entity.statistics.StatisticsPeriod;
-import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.BooleanExpression;
-import com.querydsl.core.types.dsl.Expressions;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,13 +38,6 @@ public class ContentStatisticsQuerydslRepository {
                 .where(dateEq(date))
                 .fetchOne();
         return result != null ? result : 0L;
-    }
-
-    public List<ContentStatistics> findByStatisticsDate(LocalDate date) {
-        return jpaQueryFactory
-                .selectFrom(contentStatistics)
-                .where(dateEq(date))
-                .fetch();
     }
 
     /**
@@ -98,29 +89,6 @@ public class ContentStatisticsQuerydslRepository {
                 .fetch();
     }
 
-
-    public List<ContentStatistics> findByIdBetweenAndStatisticsDate(Long startId, Long endId, LocalDate date) {
-        return jpaQueryFactory
-                .selectFrom(contentStatistics)
-                .where(
-                        idBetween(startId, endId),
-                        dateEq(date)
-                )
-                .orderBy(contentStatistics.id.asc())
-                .fetch();
-    }
-
-    public List<ContentStatistics> findByContentPostIdAndStatisticsDateBetween(
-            Long contentPostId, LocalDate startDate, LocalDate endDate) {
-        return jpaQueryFactory
-                .selectFrom(contentStatistics)
-                .where(
-                        contentPostIdEq(contentPostId),
-                        betweenDates(startDate, endDate)
-                )
-                .fetch();
-    }
-
     public List<ContentStatistics> findTop5ByViewCount(StatisticsPeriod period, LocalDate date) {
         return jpaQueryFactory
                 .selectFrom(contentStatistics)
@@ -138,30 +106,6 @@ public class ContentStatisticsQuerydslRepository {
                 .limit(5)
                 .fetch();
     }
-
-    public List<ContentStatistics> findStatisticsByCondition(Long cursorId, LocalDate statisticsDate, StatisticsPeriod period, Long fetchSize) {
-        return jpaQueryFactory
-                .selectFrom(contentStatistics)
-                .where(
-                        dateEq(statisticsDate),
-                        periodEq(period),
-                        cursorCondition(cursorId)
-                )
-                .orderBy(contentStatistics.id.asc())
-                .limit(fetchSize)
-                .fetch();
-    }
-
-    public List<ContentStatistics> findByIdBetweenAndStatisticsDateOrderByContentPostId(
-            Long startId, Long endId, LocalDate date) {
-        return jpaQueryFactory
-                .selectFrom(contentStatistics)
-                .where(idBetween(startId, endId), dateEq(date))
-                .orderBy(contentStatistics.contentPost.id.asc())
-                .fetch();
-    }
-
-    // --- 추가 메서드 시작 ---
 
     /**
      * 기간(From~To)과 기간타입에 해당하는 통계 조회
@@ -218,42 +162,8 @@ public class ContentStatisticsQuerydslRepository {
         return contentStatistics.statisticsDate.eq(date);
     }
 
-    private BooleanExpression idBetween(Long startId, Long endId) {
-        return contentStatistics.id.between(startId, endId);
-    }
-
     private BooleanExpression betweenDates(LocalDate startDate, LocalDate endDate) {
         return contentStatistics.statisticsDate.between(startDate, endDate);
-    }
-
-    private BooleanExpression contentPostIdEq(Long contentPostId) {
-        return contentPostId != null ? contentStatistics.contentPost.id.eq(contentPostId) : null;
-    }
-
-    private BooleanExpression cursorCondition(Long cursorId) {
-        return cursorId == null ? null : contentStatistics.id.goe(cursorId);
-    }
-
-    public List<CumulativeStatisticsDto> findDailyStatisticsByContentIdBetween(
-            Long startContentId, Long endContentId, LocalDate targetDate) {
-        return jpaQueryFactory
-                .select(Projections.constructor(CumulativeStatisticsDto.class,
-                        contentStatistics.contentPost.id,
-                        contentStatistics.viewCount.sum(),
-                        contentStatistics.watchTime.sum(),
-                        Expressions.constant(0L)))
-                .from(contentStatistics)
-                .where(
-                        contentPostIdBetween(startContentId, endContentId),
-                        dateEq(targetDate)
-                )
-                .groupBy(contentStatistics.contentPost.id)
-                .orderBy(contentStatistics.contentPost.id.asc())
-                .fetch();
-    }
-
-    private BooleanExpression contentPostIdBetween(Long startId, Long endId) {
-        return contentStatistics.contentPost.id.between(startId, endId);
     }
 }
 

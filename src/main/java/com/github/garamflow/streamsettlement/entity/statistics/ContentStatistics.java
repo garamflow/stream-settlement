@@ -16,7 +16,9 @@ import java.util.Optional;
 @Table(name = "content_statistics",
 indexes = {
   @Index(name = "idx_content_statistics_id_date", 
-         columnList = "content_statistics_id, statistics_date")
+         columnList = "content_statistics_id, statistics_date"),
+  @Index(name = "idx_content_statistics_composite", 
+         columnList = "content_post_id, period, statistics_date")
 })
 public class ContentStatistics {
 

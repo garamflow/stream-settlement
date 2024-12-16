@@ -4,7 +4,6 @@ import com.github.garamflow.streamsettlement.batch.dto.CumulativeStatisticsDto;
 import com.github.garamflow.streamsettlement.entity.statistics.ContentStatistics;
 import com.github.garamflow.streamsettlement.entity.statistics.StatisticsPeriod;
 import com.github.garamflow.streamsettlement.entity.stream.content.ContentPost;
-import com.github.garamflow.streamsettlement.repository.statistics.ContentStatisticsRepository;
 import com.github.garamflow.streamsettlement.repository.stream.ContentPostRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -16,6 +15,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
+import java.util.Arrays;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
@@ -28,83 +29,58 @@ class StatisticsItemProcessorTest {
     @Mock
     private ContentPostRepository contentPostRepository;
 
-    @Mock
-    private ContentStatisticsRepository contentStatisticsRepository;
-
     @InjectMocks
     private StatisticsItemProcessor processor;
 
     private final LocalDate targetDate = LocalDate.of(2024, 1, 1);
+    private final ContentPost contentPost1 = createContentPost(1L, 100L);
+    private final ContentPost contentPost2 = createContentPost(2L, 200L);
 
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(processor, "targetDate", targetDate);
+        
+        // 명시적으로 리스트 생성
+        List<ContentPost> contentPosts = Arrays.asList(contentPost1, contentPost2);
+        when(contentPostRepository.findAll()).thenReturn(contentPosts);
+        
+        // 캐시 초기화
+        processor.init();
     }
 
     @Test
-    @DisplayName("새로운 통계 생성")
-    void processNewStatistics() throws Exception {
+    @DisplayName("캐시된 컨텐츠로 통계 생성")
+    void processWithCachedContent() throws Exception {
         // given
-        ContentPost contentPost = createContentPost(1L, 100L);
         CumulativeStatisticsDto dto = new CumulativeStatisticsDto(1L, 10L, 1000L, 110L);
-
-        when(contentPostRepository.findById(1L)).thenReturn(Optional.of(contentPost));
-        when(contentStatisticsRepository.findByContentPost_IdAndPeriodAndStatisticsDate(
-                1L, StatisticsPeriod.DAILY, targetDate))
-                .thenReturn(Optional.empty());
 
         // when
         ContentStatistics result = processor.process(dto);
 
         // then
         assertThat(result)
+                .isNotNull()
                 .satisfies(statistics -> {
-                    assertThat(statistics.getContentPost()).isEqualTo(contentPost);
+                    assertThat(statistics.getContentPost()).isEqualTo(contentPost1);
                     assertThat(statistics.getStatisticsDate()).isEqualTo(targetDate);
                     assertThat(statistics.getPeriod()).isEqualTo(StatisticsPeriod.DAILY);
                     assertThat(statistics.getViewCount()).isEqualTo(dto.totalViews());
                     assertThat(statistics.getWatchTime()).isEqualTo(dto.totalWatchTime());
-                    assertThat(statistics.getAccumulatedViews()).isEqualTo(contentPost.getTotalViews());
+                    assertThat(statistics.getAccumulatedViews()).isEqualTo(contentPost1.getTotalViews());
                 });
     }
 
     @Test
-    @DisplayName("기존 통계 업데이트")
-    void processExistingStatistics() throws Exception {
-        // given
-        ContentPost contentPost = createContentPost(1L, 100L);
-        CumulativeStatisticsDto dto = new CumulativeStatisticsDto(1L, 10L, 1000L, 110L);
-        ContentStatistics existing = createExistingStatistics(contentPost, 150L);
-
-        when(contentPostRepository.findById(1L)).thenReturn(Optional.of(contentPost));
-        when(contentStatisticsRepository.findByContentPost_IdAndPeriodAndStatisticsDate(
-                1L, StatisticsPeriod.DAILY, targetDate))
-                .thenReturn(Optional.of(existing));
-
-        // when
-        ContentStatistics result = processor.process(dto);
-
-        // then
-        assertThat(result)
-                .satisfies(statistics -> {
-                    assertThat(statistics.getViewCount()).isEqualTo(dto.totalViews());
-                    assertThat(statistics.getWatchTime()).isEqualTo(dto.totalWatchTime());
-                    assertThat(statistics.getAccumulatedViews()).isEqualTo(existing.getAccumulatedViews());
-                });
-    }
-
-    @Test
-    @DisplayName("컨텐츠를 찾을 수 없을 때 예외 발생")
-    void processNotFoundContent() {
+    @DisplayName("캐시에 없는 컨텐츠 처리시 예외 발생")
+    void processNotCachedContent() {
         // given
         CumulativeStatisticsDto dto = new CumulativeStatisticsDto(999L, 10L, 1000L, 110L);
-        when(contentPostRepository.findById(999L))
-                .thenReturn(Optional.empty());
+        when(contentPostRepository.findById(999L)).thenReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() -> processor.process(dto))
                 .isInstanceOf(NoSuchElementException.class)
-                .hasMessage("ContentPost not found");
+                .hasMessage("ContentPost not found in cache or database for id: 999");
     }
 
     private ContentPost createContentPost(Long id, Long totalViews) {
@@ -115,16 +91,5 @@ class StatisticsItemProcessorTest {
                 .build();
         ReflectionTestUtils.setField(contentPost, "id", id);
         return contentPost;
-    }
-
-    private ContentStatistics createExistingStatistics(ContentPost contentPost, Long accumulatedViews) {
-        return ContentStatistics.existingBuilder()
-                .contentPost(contentPost)
-                .statisticsDate(targetDate)
-                .period(StatisticsPeriod.DAILY)
-                .viewCount(5L)
-                .watchTime(500L)
-                .accumulatedViews(accumulatedViews)
-                .build();
     }
 }
