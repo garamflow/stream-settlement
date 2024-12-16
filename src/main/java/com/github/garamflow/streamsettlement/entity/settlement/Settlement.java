@@ -19,6 +19,10 @@ import java.time.LocalDateTime;
                         name = "uk_settlement_content_date",
                         columnNames = {"content_post_id", "settlement_date"}
                 )
+        },
+        indexes = {
+                @Index(name = "idx_settlement_id_date", 
+                       columnList = "settlement_id, settlement_date"),
         })
 public class Settlement {
 
@@ -53,14 +57,14 @@ public class Settlement {
     @Column(name = "status", nullable = false)
     private SettlementStatus status = SettlementStatus.CALCULATED;
 
-    @Builder(builderMethodName = "customBuilder")
+    @Builder(builderMethodName = "createBuilder")
     private Settlement(Long contentPostId,
-                       Long contentRevenue,
-                       Long adRevenue,
-                       Long totalContentRevenue,
-                       Long totalAdRevenue,
-                       LocalDate settlementDate,
-                       SettlementStatus status) {
+                      Long contentRevenue,
+                      Long adRevenue,
+                      Long totalContentRevenue,
+                      Long totalAdRevenue,
+                      LocalDate settlementDate,
+                      SettlementStatus status) {
         this.contentPostId = contentPostId;
         this.contentRevenue = contentRevenue;
         this.adRevenue = adRevenue;
@@ -68,5 +72,26 @@ public class Settlement {
         this.totalAdRevenue = totalAdRevenue;
         this.settlementDate = settlementDate;
         this.status = status != null ? status : SettlementStatus.CALCULATED;
+    }
+
+    @Builder(builderMethodName = "existingBuilder")
+    private Settlement(Long id,
+                      Long contentPostId,
+                      Long contentRevenue,
+                      Long adRevenue,
+                      Long totalContentRevenue,
+                      Long totalAdRevenue,
+                      LocalDate settlementDate,
+                      LocalDateTime createdAt,
+                      SettlementStatus status) {
+        this.id = id;
+        this.contentPostId = contentPostId;
+        this.contentRevenue = contentRevenue;
+        this.adRevenue = adRevenue;
+        this.totalContentRevenue = totalContentRevenue;
+        this.totalAdRevenue = totalAdRevenue;
+        this.settlementDate = settlementDate;
+        this.createdAt = createdAt;
+        this.status = status;
     }
 }

@@ -27,9 +27,20 @@ public class DailyWatchedContent {
     @CreationTimestamp
     private LocalDateTime createdAt;
 
-    @Builder(builderMethodName = "customBuilder")
-    public DailyWatchedContent(Long contentPostId, LocalDate watchedDate) {
+    @Builder(builderMethodName = "createBuilder")
+    public DailyWatchedContent(Long contentPostId) {
         this.contentPostId = contentPostId;
-        this.watchedDate = watchedDate != null ? watchedDate : LocalDate.now();
+        this.watchedDate = LocalDate.now();
+    }
+
+    @Builder(builderMethodName = "existingBuilder")
+    public DailyWatchedContent(Long id,
+                              Long contentPostId,
+                              LocalDate watchedDate,
+                              LocalDateTime createdAt) {
+        this.id = id;
+        this.contentPostId = contentPostId;
+        this.watchedDate = watchedDate;
+        this.createdAt = createdAt;
     }
 }

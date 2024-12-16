@@ -56,14 +56,38 @@ public class MemberContentWatchLog {
         return !watchedDate.isAfter(LocalDate.now());
     }
 
-    @Builder(builderMethodName = "customBuilder")
-    public MemberContentWatchLog(Long memberId, Long contentPostId, Long lastPlaybackPosition, Long totalPlaybackTime, LocalDate watchedDate, StreamingStatus streamingStatus) {
+    // 새로운 시청 로그 생성용
+    @Builder(builderMethodName = "createBuilder")
+    private MemberContentWatchLog(Long memberId, 
+                                Long contentPostId, 
+                                Long lastPlaybackPosition,
+                                StreamingStatus streamingStatus) {
         this.memberId = memberId;
         this.contentPostId = contentPostId;
-        this.lastPlaybackPosition = lastPlaybackPosition != null ? lastPlaybackPosition : 0L; // 기본값 처리
-        this.totalPlaybackTime = totalPlaybackTime != null ? totalPlaybackTime : 0L;         // 기본값 처리
-        this.watchedDate = watchedDate != null ? watchedDate : LocalDate.now();            // 기본값 처리
-        this.streamingStatus = streamingStatus != null ? streamingStatus : StreamingStatus.IN_PROGRESS; // 기본값 처리
+        this.lastPlaybackPosition = lastPlaybackPosition != null ? lastPlaybackPosition : 0L;
+        this.totalPlaybackTime = 0L;
+        this.watchedDate = LocalDate.now();
+        this.streamingStatus = streamingStatus != null ? streamingStatus : StreamingStatus.IN_PROGRESS;
+    }
+
+    // 기존 시청 로그 조회용
+    @Builder(builderMethodName = "existingBuilder")
+    private MemberContentWatchLog(Long id,
+                                Long memberId,
+                                Long contentPostId,
+                                Long lastPlaybackPosition,
+                                Long totalPlaybackTime,
+                                LocalDate watchedDate,
+                                LocalDateTime createdAt,
+                                StreamingStatus streamingStatus) {
+        this.id = id;
+        this.memberId = memberId;
+        this.contentPostId = contentPostId;
+        this.lastPlaybackPosition = lastPlaybackPosition;
+        this.totalPlaybackTime = totalPlaybackTime;
+        this.watchedDate = watchedDate;
+        this.createdAt = createdAt;
+        this.streamingStatus = streamingStatus;
     }
 
     public void updatePlaybackPosition(Long newPosition) {

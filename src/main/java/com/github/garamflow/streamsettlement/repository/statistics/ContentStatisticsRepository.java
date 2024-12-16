@@ -18,11 +18,4 @@ public interface ContentStatisticsRepository extends JpaRepository<ContentStatis
     );
 
     List<ContentStatistics> findByStatisticsDateAndPeriod(LocalDate statisticsDate, StatisticsPeriod period);
-
-    List<ContentStatistics> findByContentPostIdAndStatisticsDateBetweenAndPeriod(
-            Long contentPostId,
-            LocalDate startDate,
-            LocalDate endDate,
-            StatisticsPeriod period
-    );
 }

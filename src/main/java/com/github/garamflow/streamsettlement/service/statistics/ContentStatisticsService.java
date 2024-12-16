@@ -1,11 +1,9 @@
 package com.github.garamflow.streamsettlement.service.statistics;
 
-import com.github.garamflow.streamsettlement.controller.dto.stream.response.ContentStatisticsResponse;
+import com.github.garamflow.streamsettlement.controller.dto.statistics.ContentStatisticsResponse;
 import com.github.garamflow.streamsettlement.entity.statistics.ContentStatistics;
 import com.github.garamflow.streamsettlement.entity.statistics.StatisticsPeriod;
-import com.github.garamflow.streamsettlement.entity.stream.Log.MemberContentWatchLog;
-import com.github.garamflow.streamsettlement.entity.stream.content.ContentPost;
-import com.github.garamflow.streamsettlement.repository.log.MemberContentWatchLogRepository;
+import com.github.garamflow.streamsettlement.repository.statistics.ContentStatisticsQuerydslRepository;
 import com.github.garamflow.streamsettlement.repository.statistics.ContentStatisticsRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -13,7 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
 
 import static java.time.temporal.TemporalAdjusters.previousOrSame;
@@ -23,26 +20,69 @@ import static java.time.temporal.TemporalAdjusters.previousOrSame;
 @Transactional
 public class ContentStatisticsService {
 
+    private final ContentStatisticsQuerydslRepository contentStatisticsQuerydslRepository;
     private final ContentStatisticsRepository contentStatisticsRepository;
-    private final MemberContentWatchLogRepository memberContentWatchLogRepository;
-    private final Long fetchSize = 1000L;
 
+    // 기간별 Top5 조회 로직 추가 (조회수 기준)
     public List<ContentStatisticsResponse> getTop5Views(StatisticsPeriod period) {
         LocalDate targetDate = getTargetDate(period);
-        List<ContentStatistics> statistics = contentStatisticsRepository.findTop5ByViewCount(period, targetDate);
-
+        List<ContentStatistics> statistics = contentStatisticsQuerydslRepository.findTop5ByViewCount(period, targetDate);
         return statistics.stream()
                 .map(ContentStatisticsResponse::from)
                 .toList();
     }
 
+    // 기간별 Top5 조회 로직 추가 (시청시간 기준)
     public List<ContentStatisticsResponse> getTop5WatchTime(StatisticsPeriod period) {
         LocalDate targetDate = getTargetDate(period);
-        List<ContentStatistics> statistics = contentStatisticsRepository.findTop5ByWatchTime(period, targetDate);
-
+        List<ContentStatistics> statistics = contentStatisticsQuerydslRepository.findTop5ByWatchTime(period, targetDate);
         return statistics.stream()
                 .map(ContentStatisticsResponse::from)
                 .toList();
+    }
+
+    // From~To 기간 지정 Top5 조회 (조회수 기준)
+    public List<ContentStatisticsResponse> getTop5ViewsBetween(StatisticsPeriod period, LocalDate startDate, LocalDate endDate) {
+        // Repository에 findTop5ByViewCountBetweenAndPeriod(startDate,endDate,period) 추가 필요
+        List<ContentStatistics> statistics = contentStatisticsQuerydslRepository.findTop5ByViewCountBetweenAndPeriod(startDate, endDate, period);
+        return statistics.stream()
+                .map(ContentStatisticsResponse::from)
+                .toList();
+    }
+
+    // From~To 기간 지정 Top5 조회 (시청시간 기준)
+    public List<ContentStatisticsResponse> getTop5WatchTimeBetween(StatisticsPeriod period, LocalDate startDate, LocalDate endDate) {
+        // Repository에 findTop5ByWatchTimeBetweenAndPeriod(startDate,endDate,period) 추가 필요
+        List<ContentStatistics> statistics = contentStatisticsQuerydslRepository.findTop5ByWatchTimeBetweenAndPeriod(startDate, endDate, period);
+        return statistics.stream()
+                .map(ContentStatisticsResponse::from)
+                .toList();
+    }
+
+    // 일간 조회
+    public List<ContentStatistics> getDailyStatistics(LocalDate date) {
+        return contentStatisticsRepository.findByStatisticsDateAndPeriod(date, StatisticsPeriod.DAILY);
+    }
+
+    // 주간 조회
+    public List<ContentStatistics> getWeeklyStatistics(LocalDate startDate) {
+        return contentStatisticsRepository.findByStatisticsDateAndPeriod(startDate, StatisticsPeriod.WEEKLY);
+    }
+
+    // 월간 조회
+    public List<ContentStatistics> getMonthlyStatistics(LocalDate yearMonth) {
+        return contentStatisticsRepository.findByStatisticsDateAndPeriod(yearMonth, StatisticsPeriod.MONTHLY);
+    }
+
+    // 연간 조회
+    public List<ContentStatistics> getYearlyStatistics(LocalDate year) {
+        return contentStatisticsRepository.findByStatisticsDateAndPeriod(year, StatisticsPeriod.YEARLY);
+    }
+
+    // From~To 기간 지정 통계 조회 (예: 일간 기간 조회)
+    public List<ContentStatistics> getStatisticsBetween(StatisticsPeriod period, LocalDate startDate, LocalDate endDate) {
+        // Repository에 findByStatisticsDateBetweenAndPeriod(startDate, endDate, period) 추가 필요
+        return contentStatisticsQuerydslRepository.findByStatisticsDateBetweenAndPeriod(startDate, endDate, period);
     }
 
     private LocalDate getTargetDate(StatisticsPeriod period) {
@@ -53,89 +93,5 @@ public class ContentStatisticsService {
             case MONTHLY -> now.withDayOfMonth(1);
             case YEARLY -> now.withDayOfYear(1);
         };
-    }
-
-    public List<ContentStatistics> createDailyStatistics(ContentPost contentPost, LocalDate logDate) {
-        validateContentPost(contentPost);
-
-        List<ContentStatistics> statistics = new ArrayList<>();
-        Long cursorId = null;
-
-        while (true) {
-            List<MemberContentWatchLog> watchLogs = fetchWatchLogs(contentPost.getId(), logDate, cursorId);
-            if (watchLogs.isEmpty()) break;
-
-            updateStatistics(statistics, watchLogs, contentPost, logDate);
-
-            if (watchLogs.size() < fetchSize) break;
-            cursorId = watchLogs.get(watchLogs.size() - 1).getId();
-        }
-
-        return statistics;
-    }
-
-    private List<MemberContentWatchLog> fetchWatchLogs(Long contentPostId, LocalDate logDate, Long cursorId) {
-        return memberContentWatchLogRepository.findByContentPostIdAndWatchedDateWithPaging(contentPostId, logDate, cursorId, fetchSize);
-    }
-
-    private void updateStatistics(List<ContentStatistics> statistics, List<MemberContentWatchLog> watchLogs, ContentPost contentPost, LocalDate logDate) {
-        long uniqueViewers = watchLogs.stream()
-                .map(MemberContentWatchLog::getMemberId)
-                .distinct()
-                .count();
-
-        long totalWatchTime = watchLogs.stream()
-                .mapToLong(MemberContentWatchLog::getTotalPlaybackTime)
-                .sum();
-
-        for (StatisticsPeriod period : StatisticsPeriod.getAllPeriodsForDaily()) {
-            LocalDate statisticsDate = getStatisticsDate(logDate, period);
-
-            ContentStatistics stats = contentStatisticsRepository.findByContentPost_IdAndPeriodAndStatisticsDate(
-                            contentPost.getId(), period, statisticsDate)
-                    .orElseGet(() -> ContentStatistics.customBuilder()
-                            .contentPost(contentPost)
-                            .statisticsDate(statisticsDate)
-                            .period(period)
-                            .viewCount(0L)
-                            .watchTime(0L)
-                            .accumulatedViews(contentPost.getTotalViews())
-                            .build());
-
-            stats.addDailyStats(uniqueViewers, totalWatchTime);
-            statistics.add(stats);
-        }
-    }
-
-    private LocalDate getStatisticsDate(LocalDate logDate, StatisticsPeriod period) {
-        return switch (period) {
-            case DAILY -> logDate;
-            case WEEKLY -> logDate.with(previousOrSame(DayOfWeek.MONDAY));
-            case MONTHLY -> logDate.withDayOfMonth(1);
-            case YEARLY -> logDate.withMonth(1).withDayOfMonth(1);
-        };
-    }
-
-    private void validateContentPost(ContentPost contentPost) {
-        if (contentPost == null) {
-            throw new IllegalArgumentException("ContentPost must not be null");
-        }
-    }
-
-    public List<ContentStatistics> getDailyStatistics(LocalDate date) {
-        return contentStatisticsRepository.findByStatisticsDateAndPeriod(date, StatisticsPeriod.DAILY);
-    }
-
-    public List<ContentStatistics> getWeeklyStatistics(LocalDate startDate) {
-        return contentStatisticsRepository.findByStatisticsDateAndPeriod(startDate, StatisticsPeriod.WEEKLY);
-    }
-
-    public List<ContentStatistics> getMonthlyStatistics(LocalDate yearMonth) {
-        return contentStatisticsRepository.findByStatisticsDateAndPeriod(yearMonth, StatisticsPeriod.MONTHLY);
-    }
-
-    public List<ContentStatistics> getContentStatistics(Long contentPostId, LocalDate startDate, LocalDate endDate) {
-        return contentStatisticsRepository.findByContentPostIdAndStatisticsDateBetweenAndPeriod(
-                contentPostId, startDate, endDate, StatisticsPeriod.DAILY);
     }
 }

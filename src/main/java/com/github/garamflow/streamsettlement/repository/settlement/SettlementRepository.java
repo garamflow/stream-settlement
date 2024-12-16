@@ -10,10 +10,4 @@ public interface SettlementRepository extends JpaRepository<Settlement, Long>, S
     List<Settlement> findBySettlementDateBetween(LocalDate startDate, LocalDate endDate);
 
     List<Settlement> findBySettlementDate(LocalDate date);
-
-    List<Settlement> findByContentPostIdAndSettlementDateBetween(
-            Long contentPostId,
-            LocalDate startDate,
-            LocalDate endDate
-    );
 }

@@ -1,9 +1,7 @@
 package com.github.garamflow.streamsettlement.batch.processor;
 
-import com.github.garamflow.streamsettlement.batch.dto.PreviousSettlementDto;
-import com.github.garamflow.streamsettlement.batch.dto.StatisticsAndSettlementDto;
-import com.github.garamflow.streamsettlement.domain.AdRevenueRange;
-import com.github.garamflow.streamsettlement.domain.ContentRevenueRange;
+import com.github.garamflow.streamsettlement.batch.dto.SettlementCalculationDto;
+import com.github.garamflow.streamsettlement.batch.dto.StatisticsAndCumulativeSettlementDto;
 import com.github.garamflow.streamsettlement.entity.settlement.Settlement;
 import com.github.garamflow.streamsettlement.entity.statistics.ContentStatistics;
 import lombok.RequiredArgsConstructor;
@@ -19,42 +17,60 @@ import java.time.LocalDate;
 @Component
 @StepScope
 @RequiredArgsConstructor
-public class SettlementItemProcessor implements ItemProcessor<StatisticsAndSettlementDto, Settlement> {
+public class SettlementItemProcessor implements ItemProcessor<StatisticsAndCumulativeSettlementDto, Settlement> {
 
     @Value("#{jobParameters['targetDate']}")
-    private String targetDate;
+    private LocalDate targetDate;
 
     @Override
-    public Settlement process(StatisticsAndSettlementDto item) throws Exception {
+    public Settlement process(StatisticsAndCumulativeSettlementDto item) throws Exception {
         ContentStatistics statistics = item.statistics();
-        PreviousSettlementDto previousSettlement = item.previousSettlement();
+        SettlementCalculationDto calculationDto = item.cumulativeSettlementDto();
 
-        // 누적 수익 계산
-        long totalContentRevenue = ContentRevenueRange.calculateRevenueByViews(
-                statistics.getAccumulatedViews()
-        );
-        long totalAdRevenue = AdRevenueRange.calculateRevenueByViews(
-                statistics.getWatchTime()
-        );
+        // 일일 정산액 계산
+        long dailyContentRevenue = calculateDailyContentRevenue(calculationDto);
+        long dailyAdRevenue = calculateDailyAdRevenue(calculationDto);
 
-        // 일일 정산 계산 (음수 방지)
-        long dailyContentRevenue = Math.max(0,
-                totalContentRevenue - previousSettlement.previousTotalContentRevenue()
-        );
-        long dailyAdRevenue = Math.max(0,
-                totalAdRevenue - previousSettlement.previousTotalAdRevenue()
-        );
+        logSettlementProcessing(statistics.getContentPost().getId(), dailyContentRevenue, dailyAdRevenue);
 
-        log.debug("Processing settlement - contentId: {}, dailyContentRevenue: {}, dailyAdRevenue: {}",
-                statistics.getContentPost().getId(), dailyContentRevenue, dailyAdRevenue);
+        return createSettlement(
+                statistics.getContentPost().getId(),
+                dailyContentRevenue,
+                dailyAdRevenue,
+                calculationDto.totalContentRevenue(),
+                calculationDto.totalAdRevenue()
+        );
+    }
 
-        return Settlement.customBuilder()
-                .contentPostId(statistics.getContentPost().getId())
+    private long calculateDailyContentRevenue(SettlementCalculationDto calculationDto) {
+        return Math.max(0,
+                calculationDto.totalContentRevenue() - calculationDto.previousContentRevenue());
+    }
+
+    private long calculateDailyAdRevenue(SettlementCalculationDto calculationDto) {
+        return Math.max(0,
+                calculationDto.totalAdRevenue() - calculationDto.previousAdRevenue());
+    }
+
+    private void logSettlementProcessing(Long contentId, long dailyContentRevenue, long dailyAdRevenue) {
+        log.debug("정산 처리 - contentId: {}, 일일 콘텐츠 수익: {}, 일일 광고 수익: {}",
+                contentId, dailyContentRevenue, dailyAdRevenue);
+    }
+
+    private Settlement createSettlement(
+            Long contentId,
+            long dailyContentRevenue,
+            long dailyAdRevenue,
+            long totalContentRevenue,
+            long totalAdRevenue
+    ) {
+        return Settlement.existingBuilder()
+                .contentPostId(contentId)
                 .contentRevenue(dailyContentRevenue)
                 .adRevenue(dailyAdRevenue)
                 .totalContentRevenue(totalContentRevenue)
                 .totalAdRevenue(totalAdRevenue)
-                .settlementDate(LocalDate.parse(targetDate))
+                .settlementDate(targetDate)
                 .build();
     }
 }

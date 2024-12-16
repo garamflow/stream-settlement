@@ -91,7 +91,10 @@ public class StreamingServiceImpl implements StreamingService {
         return StreamingStatus.IN_PROGRESS;
     }
 
+    @Override
     public void endPlayback(Long memberId, Long contentId, Long finalPosition, StreamingEndType endType) {
+        validateEndPlayback(contentId, finalPosition, endType);
+
         var watchLog = memberContentWatchLogRepository
                 .findByMemberIdAndContentPostId(memberId, contentId)
                 .orElseThrow(() -> new IllegalArgumentException("Watch log not found"));
@@ -102,17 +105,46 @@ public class StreamingServiceImpl implements StreamingService {
             case STOP -> StreamingStatus.STOPPED;
         };
 
+        calculateAndUpdateTotalPlaybackTime(watchLog, finalPosition);
         watchLog.updatePlaybackPosition(finalPosition);
         watchLog.updateStatus(newStatus);
 
-        // 일일 시청 기록 업데이트
         updateDailyWatchedContent(contentId, newStatus);
+    }
+
+    private void calculateAndUpdateTotalPlaybackTime(MemberContentWatchLog watchLog, Long finalPosition) {
+        // 이전 재생 위치와 현재 위치의 차이를 계산
+        long additionalTime = finalPosition - watchLog.getLastPlaybackPosition();
+        if (additionalTime > 0) {
+            watchLog.updateTotalPlaybackTime(additionalTime);
+        }
+    }
+
+    private void validateEndPlayback(Long contentId, Long finalPosition, StreamingEndType endType) {
+        if (endType != StreamingEndType.COMPLETE) {
+            return; // COMPLETE가 아닌 경우는 검증 스킵
+        }
+
+        ContentPost content = contentPostRepository.findById(contentId)
+                .orElseThrow(() -> new IllegalArgumentException("Content not found"));
+
+        if (finalPosition <= 0) {
+            throw new IllegalArgumentException("LastPlaybackPosition must be positive");
+        }
+
+        if (finalPosition > content.getDuration()) {
+            throw new IllegalArgumentException("Final position cannot exceed content duration");
+        }
     }
 
     public void recordContentWatch(Long memberId, Long contentId, LocalDate watchedDate) {
         // 1. DailyWatchedContent 기록 (중복 체크 포함)
         if (!dailyWatchedContentRepository.existsByContentPostIdAndWatchedDate(contentId, watchedDate)) {
-            dailyWatchedContentRepository.save(new DailyWatchedContent(contentId, watchedDate));
+            dailyWatchedContentRepository.save(
+                    DailyWatchedContent.createBuilder()
+                            .contentPostId(contentId)
+                            .build()
+            );
         }
 
         // 2. MemberContentWatchLog 기록/업데이트
@@ -120,7 +152,7 @@ public class StreamingServiceImpl implements StreamingService {
                 .ifPresentOrElse(
                         log -> log.updateStatus(StreamingStatus.IN_PROGRESS),
                         () -> memberContentWatchLogRepository.save(
-                                MemberContentWatchLog.customBuilder()
+                                MemberContentWatchLog.existingBuilder()
                                         .memberId(memberId)
                                         .contentPostId(contentId)
                                         .watchedDate(watchedDate)
