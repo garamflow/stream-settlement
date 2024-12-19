@@ -5,6 +5,10 @@ import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
+/**
+ * 배치 작업 관련 설정값들을 관리하는 클래스
+ * application.yml 또는 properties 파일의 'batch' prefix 설정을 매핑
+ */
 @Getter
 @Setter
 @Component
@@ -12,24 +16,15 @@ import org.springframework.stereotype.Component;
 public class BatchProperties {
 
     private int chunkSize = 1000;  // 기본값 1000
-    private int maxGridSize = 8;    // 기본값 8
-    private Partition partition = new Partition();
+    private int gridSize = 8;      // 기본 파티션 수 (8코어 시스템 기준)
     private Pool pool = new Pool();
     private Reader reader = new Reader();
 
-    @Getter
-    @Setter
-    public static class Partition {
-        private long smallDataSize = 10000L;    // 10000개 미만
-        private long mediumDataSize = 100000L;  // 100000개 미만
-        private long largeDataSize = 1000000L;  // 1000000개 미만
 
-        private int smallGridSize = 1;      // 작은 데이터용 파티션 수
-        private int mediumGridSize = 2;     // 중간 데이터용 파티션 수
-        private int largeGridSize = 4;      // 큰 데이터용 파티션 수
-        private int extraLargeGridSize = 8; // 매우 큰 데이터용 파티션 수
-    }
-
+    /**
+     * 스레드 풀 설정
+     * - 병렬 처리를 위한 스레드 풀 크기 및 설정
+     */
     @Getter
     @Setter
     public static class Pool {
@@ -39,6 +34,10 @@ public class BatchProperties {
         private String threadNamePrefix = "batch-";
     }
 
+    /**
+     * 데이터 읽기 관련 설정
+     * - 메모리 사용량 제어 및 성능 최적화를 위한 설정
+     */
     @Getter
     @Setter
     public static class Reader {

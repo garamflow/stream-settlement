@@ -1,7 +1,5 @@
 package com.github.garamflow.streamsettlement.repository.statistics;
 
-import com.github.garamflow.streamsettlement.batch.dto.CumulativeStatisticsDto;
-import com.github.garamflow.streamsettlement.batch.dto.QCumulativeStatisticsDto;
 import com.github.garamflow.streamsettlement.entity.statistics.ContentStatistics;
 import com.github.garamflow.streamsettlement.entity.statistics.StatisticsPeriod;
 import com.querydsl.core.types.dsl.BooleanExpression;
@@ -38,36 +36,6 @@ public class ContentStatisticsQuerydslRepository {
                 .where(dateEq(date))
                 .fetchOne();
         return result != null ? result : 0L;
-    }
-
-    /**
-     * Zero-Offset 방식의 통계 데이터 조회
-     */
-    public List<CumulativeStatisticsDto> findDailyStatisticsByContentIdGreaterThan(
-            Long lastContentId,
-            LocalDate targetDate,
-            int limit) {
-
-        List<CumulativeStatisticsDto> results = jpaQueryFactory
-                .select(new QCumulativeStatisticsDto(
-                        contentStatistics.contentPost.id,
-                        contentStatistics.viewCount,
-                        contentStatistics.watchTime,
-                        contentStatistics.accumulatedViews
-                ))
-                .from(contentStatistics)
-                .where(
-                        contentStatistics.statisticsDate.eq(targetDate),
-                        lastContentId == null ? null : contentStatistics.contentPost.id.gt(lastContentId)
-                )
-                .orderBy(contentStatistics.contentPost.id.asc())
-                .limit(limit)
-                .fetch();
-
-        log.debug("Zero-Offset query executed - lastContentId: {}, results: {}",
-                lastContentId, results.size());
-
-        return results;
     }
 
     /**

@@ -2,8 +2,7 @@ package com.github.garamflow.streamsettlement.batch.reader;
 
 import com.github.garamflow.streamsettlement.batch.config.BatchProperties;
 import com.github.garamflow.streamsettlement.batch.dto.CumulativeStatisticsDto;
-import com.github.garamflow.streamsettlement.repository.statistics.ContentStatisticsQuerydslRepository;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import com.github.garamflow.streamsettlement.repository.log.DailyWatchedContentQuerydslRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,20 +15,16 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class StatisticsItemReaderTest {
 
     @Mock
-    private ContentStatisticsQuerydslRepository contentStatisticsQuerydslRepository;
+    private DailyWatchedContentQuerydslRepository dailyWatchedContentRepository;
 
     @Mock
     private BatchProperties batchProperties;
@@ -41,17 +36,17 @@ class StatisticsItemReaderTest {
     private StatisticsItemReader reader;
 
     private final LocalDate targetDate = LocalDate.of(2024, 1, 1);
-    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     private final List<CumulativeStatisticsDto> sampleStatistics = List.of(
-            new CumulativeStatisticsDto(1L, 100L, 1000L, 150L),
-            new CumulativeStatisticsDto(2L, 200L, 2000L, 350L)
+            new CumulativeStatisticsDto(1L, 1L, 100L, 1000L, targetDate),
+            new CumulativeStatisticsDto(2L, 2L, 200L, 2000L, targetDate)
     );
 
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(reader, "targetDate", targetDate);
-        ReflectionTestUtils.setField(reader, "meterRegistry", meterRegistry);
+        ReflectionTestUtils.setField(reader, "startContentId", 0L);
+        ReflectionTestUtils.setField(reader, "endContentId", 100L);
         when(batchProperties.getReader()).thenReturn(readerProperties);
         when(readerProperties.getQueueCapacity()).thenReturn(100);
 
@@ -63,16 +58,22 @@ class StatisticsItemReaderTest {
     void readSuccess() throws Exception {
         // given
         when(batchProperties.getChunkSize()).thenReturn(10);
-        when(contentStatisticsQuerydslRepository.findDailyStatisticsByContentIdGreaterThan(
-                0L, targetDate, 10))
+        
+        // 첫 번째 호출에서만 데이터 반환, 두 번째 호출에서는 빈 리스트 반환
+        when(dailyWatchedContentRepository.findContentIdsByWatchedDate(
+                eq(targetDate), any(Long.class), anyInt()))
+                .thenReturn(List.of(1L, 2L))  // 첫 호출
+                .thenReturn(Collections.emptyList());  // 이후 호출
+        
+        when(dailyWatchedContentRepository.findDailyWatchedContentForStatistics(
+                eq(List.of(1L, 2L)), eq(targetDate)))
                 .thenReturn(sampleStatistics);
 
-        // when
+        // when & then
         CumulativeStatisticsDto firstRead = reader.read();
         CumulativeStatisticsDto secondRead = reader.read();
         CumulativeStatisticsDto thirdRead = reader.read();
 
-        // then
         assertThat(firstRead).isEqualTo(sampleStatistics.get(0));
         assertThat(secondRead).isEqualTo(sampleStatistics.get(1));
         assertThat(thirdRead).isNull();
@@ -83,8 +84,8 @@ class StatisticsItemReaderTest {
     void readEmptyData() throws Exception {
         // given
         when(batchProperties.getChunkSize()).thenReturn(10);
-        when(contentStatisticsQuerydslRepository.findDailyStatisticsByContentIdGreaterThan(
-                0L, targetDate, 10))
+        when(dailyWatchedContentRepository.findContentIdsByWatchedDate(
+                eq(targetDate), any(Long.class), anyInt()))
                 .thenReturn(Collections.emptyList());
 
         // when
@@ -102,9 +103,12 @@ class StatisticsItemReaderTest {
         when(readerProperties.getQueueCapacity()).thenReturn(1);
         reader.init();
 
-        // 한 번의 호출에 대해서만 데이터 반환
-        when(contentStatisticsQuerydslRepository.findDailyStatisticsByContentIdGreaterThan(
-                eq(0L), eq(targetDate), anyInt()))
+        when(dailyWatchedContentRepository.findContentIdsByWatchedDate(
+                eq(targetDate), any(Long.class), anyInt()))
+                .thenReturn(List.of(1L));
+
+        when(dailyWatchedContentRepository.findDailyWatchedContentForStatistics(
+                eq(List.of(1L)), eq(targetDate)))
                 .thenReturn(List.of(sampleStatistics.get(0)));
 
         // when
@@ -112,8 +116,6 @@ class StatisticsItemReaderTest {
 
         // then
         assertThat(result).isEqualTo(sampleStatistics.get(0));
-        verify(contentStatisticsQuerydslRepository)
-                .findDailyStatisticsByContentIdGreaterThan(eq(0L), eq(targetDate), anyInt());
     }
 
     @Test
@@ -124,9 +126,12 @@ class StatisticsItemReaderTest {
         when(readerProperties.getQueueCapacity()).thenReturn(1);
         reader.init();
 
-        // 첫 번째 호출만 데이터 반환
-        when(contentStatisticsQuerydslRepository.findDailyStatisticsByContentIdGreaterThan(
-                eq(0L), eq(targetDate), anyInt()))
+        when(dailyWatchedContentRepository.findContentIdsByWatchedDate(
+                eq(targetDate), any(Long.class), anyInt()))
+                .thenReturn(List.of(1L));
+
+        when(dailyWatchedContentRepository.findDailyWatchedContentForStatistics(
+                eq(List.of(1L)), eq(targetDate)))
                 .thenReturn(List.of(sampleStatistics.get(0)));
 
         // when
@@ -134,18 +139,5 @@ class StatisticsItemReaderTest {
 
         // then
         assertThat(result).isEqualTo(sampleStatistics.get(0));
-        verify(contentStatisticsQuerydslRepository)
-                .findDailyStatisticsByContentIdGreaterThan(eq(0L), eq(targetDate), anyInt());
-    }
-
-    private List<CumulativeStatisticsDto> generateLargeDataSet(int size) {
-        return IntStream.range(0, size)
-                .mapToObj(i -> new CumulativeStatisticsDto(
-                        (long) i,      // contentId
-                        100L * i,      // totalViews
-                        1000L * i,     // totalWatchTime
-                        150L * i       // accumulatedViews
-                ))
-                .collect(Collectors.toList());
     }
 }

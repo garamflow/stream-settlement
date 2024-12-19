@@ -35,9 +35,9 @@ public class DailyWatchedContent {
 
     @Builder(builderMethodName = "existingBuilder")
     public DailyWatchedContent(Long id,
-                              Long contentPostId,
-                              LocalDate watchedDate,
-                              LocalDateTime createdAt) {
+                               Long contentPostId,
+                               LocalDate watchedDate,
+                               LocalDateTime createdAt) {
         this.id = id;
         this.contentPostId = contentPostId;
         this.watchedDate = watchedDate;

@@ -37,6 +37,11 @@ import java.time.LocalDate;
 import java.util.Arrays;
 
 
+/**
+ * 배치 작업의 전체 구성을 정의하는 설정 클래스
+ * - 일일 통계 및 정산 작업의 Job, Step, Partitioner 등을 구성
+ * - 병렬 처리를 위한 ThreadPool 설정 포함
+ */
 @Configuration
 @RequiredArgsConstructor
 public class BatchConfig {
@@ -60,6 +65,12 @@ public class BatchConfig {
     private final SettlementItemWriter settlementItemWriter;
     private final BatchProperties batchProperties;
 
+    /**
+     * 메인 배치 Job 구성
+     * 1. 통계 처리 Step (statisticsMasterStep)
+     * 2. 정산 처리 Step (settlementMasterStep)
+     * 순차적으로 실행
+     */
     @Bean
     public Job dailyStatisticsAndSettlementJob(
             CustomJobParameterIncrementer incrementer,
@@ -73,6 +84,10 @@ public class BatchConfig {
                 .build();
     }
 
+    /**
+     * 통계 처리를 위한 파티션 Step 구성
+     * - 데이터를 여러 파티션으로 나누어 병렬 처리
+     */
     @Bean(name = "statisticsMasterStep")
     public Step dailyStatisticsPartitionMasterStep(
             @Qualifier("statisticsPartitionHandler") TaskExecutorPartitionHandler statisticsPartitionHandler) {
@@ -82,6 +97,10 @@ public class BatchConfig {
                 .build();
     }
 
+    /**
+     * 정산 처리를 위한 마스터 Step 구성
+     * - 정산 데이터를 파티션 단위로 분할하여 병렬 처리
+     */
     @Bean(name = "settlementMasterStep")
     public Step dailySettlementPartitionMasterStep(
             @Qualifier("settlementPartitionHandler") TaskExecutorPartitionHandler settlementPartitionHandler) {
@@ -91,26 +110,38 @@ public class BatchConfig {
                 .build();
     }
 
+    /**
+     * 통계 처리를 위한 파티션 핸들러 구성
+     * - 파티션된 작업을 스레드풀을 통해 병렬 실행
+     */
     @Bean(name = "statisticsPartitionHandler")
     public TaskExecutorPartitionHandler dailyStatisticsPartitionHandler(
             @Qualifier("statisticsStep") Step statisticsStep) {
         TaskExecutorPartitionHandler partitionHandler = new TaskExecutorPartitionHandler();
         partitionHandler.setStep(statisticsStep);
         partitionHandler.setTaskExecutor(executor());
-        partitionHandler.setGridSize(batchProperties.getMaxGridSize());
+        partitionHandler.setGridSize(batchProperties.getGridSize());
         return partitionHandler;
     }
 
+    /**
+     * 정산 처리를 위한 파티션 핸들러 구성
+     * - 파티션된 작업을 스레드풀을 통해 병렬 실행
+     */
     @Bean(name = "settlementPartitionHandler")
     public TaskExecutorPartitionHandler dailySettlementPartitionHandler(
             @Qualifier("settlementStep") Step settlementStep) {
         TaskExecutorPartitionHandler partitionHandler = new TaskExecutorPartitionHandler();
         partitionHandler.setStep(settlementStep);
         partitionHandler.setTaskExecutor(executor());
-        partitionHandler.setGridSize(batchProperties.getMaxGridSize());
+        partitionHandler.setGridSize(batchProperties.getGridSize());
         return partitionHandler;
     }
 
+    /**
+     * 배치 작업 실행을 위한 스레드풀 구성
+     * - 코어 풀 사이즈, 최대 풀 사이즈, 큐 용량 등 설정
+     */
     @Bean
     public TaskExecutor executor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
@@ -123,6 +154,10 @@ public class BatchConfig {
         return executor;
     }
 
+    /**
+     * 통계 처리를 위한 파티션 Step 구성
+     * - 데이터를 여러 파티션으로 나누어 병렬 처리
+     */
     @Bean(name = "statisticsStep")
     public Step dailyStatisticsStep() {
         return new StepBuilder(STATISTICS_STEP_NAME, jobRepository)
@@ -138,6 +173,11 @@ public class BatchConfig {
                 .build();
     }
 
+    /**
+     * 정산 처리를 위한 워커 Step 구성
+     * - 청크 단위로 데이터 처리
+     * - 재시도 및 오류 처리 정책 포함
+     */
     @Bean(name = "settlementStep")
     public Step dailySettlementStep() {
         return new StepBuilder(SETTLEMENT_STEP_NAME, jobRepository)
@@ -152,6 +192,11 @@ public class BatchConfig {
                 .build();
     }
 
+    /**
+     * Job 파라미터 유효성 검증기 구성
+     * - targetDate 파라미터 필수 체크
+     * - 날짜 형식 유효성 검증
+     */
     private JobParametersValidator validator() {
         DefaultJobParametersValidator defaultValidator = new DefaultJobParametersValidator();
         defaultValidator.setRequiredKeys(new String[]{"targetDate"});

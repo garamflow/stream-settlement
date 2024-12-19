@@ -13,6 +13,11 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 정산 데이터를 DB에 저장하는 Writer 구현
+ * - 청크 단위로 모아진 정산 데이터를 일괄 저장
+ * - 벌크 인서트를 통한 성능 최적화
+ */
 @Slf4j
 @Component
 @StepScope
@@ -21,10 +26,15 @@ public class SettlementItemWriter implements ItemWriter<Settlement> {
 
     private final SettlementRepository settlementRepository;
 
+    /**
+     * 정산 데이터 저장 로직
+     * - 청크 단위로 모아진 정산 데이터를 벌크 인서트
+     * 
+     * @param chunk 저장할 정산 데이터 청크
+     */
     @Override
     public void write(@NonNull Chunk<? extends Settlement> chunk) {
         List<Settlement> settlements = new ArrayList<>(chunk.getItems());
-
         settlementRepository.bulkInsertSettlement(settlements);
     }
 }
