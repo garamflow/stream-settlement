@@ -39,11 +39,11 @@ class StatisticsItemProcessorTest {
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(processor, "targetDate", targetDate);
-        
+
         // 명시적으로 리스트 생성
         List<ContentPost> contentPosts = Arrays.asList(contentPost1, contentPost2);
         when(contentPostRepository.findAll()).thenReturn(contentPosts);
-        
+
         // 캐시 초기화
         processor.init();
     }
@@ -52,7 +52,7 @@ class StatisticsItemProcessorTest {
     @DisplayName("캐시된 컨텐츠로 통계 생성")
     void processWithCachedContent() throws Exception {
         // given
-        CumulativeStatisticsDto dto = new CumulativeStatisticsDto(1L, 10L, 1000L, 110L);
+        CumulativeStatisticsDto dto = new CumulativeStatisticsDto(1L, 1L, 10L, 110L, targetDate);
 
         // when
         ContentStatistics result = processor.process(dto);
@@ -71,10 +71,35 @@ class StatisticsItemProcessorTest {
     }
 
     @Test
-    @DisplayName("캐시에 없는 컨텐츠 처리시 예외 발생")
-    void processNotCachedContent() {
+    @DisplayName("캐시 미스 시 DB에서 컨텐츠 조회")
+    void processCacheMissContent() throws Exception {
         // given
-        CumulativeStatisticsDto dto = new CumulativeStatisticsDto(999L, 10L, 1000L, 110L);
+        ContentPost newContentPost = createContentPost(3L, 300L);
+        CumulativeStatisticsDto dto = new CumulativeStatisticsDto(2L, 3L, 20L, 220L, targetDate);
+
+        when(contentPostRepository.findById(3L)).thenReturn(Optional.of(newContentPost));
+
+        // when
+        ContentStatistics result = processor.process(dto);
+
+        // then
+        assertThat(result)
+                .isNotNull()
+                .satisfies(statistics -> {
+                    assertThat(statistics.getContentPost()).isEqualTo(newContentPost);
+                    assertThat(statistics.getStatisticsDate()).isEqualTo(targetDate);
+                    assertThat(statistics.getPeriod()).isEqualTo(StatisticsPeriod.DAILY);
+                    assertThat(statistics.getViewCount()).isEqualTo(dto.totalViews());
+                    assertThat(statistics.getWatchTime()).isEqualTo(dto.totalWatchTime());
+                    assertThat(statistics.getAccumulatedViews()).isEqualTo(newContentPost.getTotalViews());
+                });
+    }
+
+    @Test
+    @DisplayName("캐시에 없는 컨텐츠 처리시 예외 발생")
+    void processNotFoundContent() {
+        // given
+        CumulativeStatisticsDto dto = new CumulativeStatisticsDto(3L, 999L, 10L, 110L, targetDate);
         when(contentPostRepository.findById(999L)).thenReturn(Optional.empty());
 
         // when & then

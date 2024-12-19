@@ -12,8 +12,6 @@ import java.util.List;
 
 import static com.github.garamflow.streamsettlement.entity.stream.Log.QDailyWatchedContent.dailyWatchedContent;
 import static com.github.garamflow.streamsettlement.entity.stream.Log.QMemberContentWatchLog.memberContentWatchLog;
-import static com.querydsl.core.types.ExpressionUtils.count;
-import static com.querydsl.core.types.dsl.Expressions.numberTemplate;
 
 
 @Repository
@@ -38,32 +36,38 @@ public class DailyWatchedContentQuerydslRepository {
     }
 
     public List<CumulativeStatisticsDto> findDailyWatchedContentForStatistics(
-            Long lastContentId,
-            LocalDate watchedDate,
-            int limit
-    ) {
+            List<Long> contentIds,
+            LocalDate targetDate) {
         return jpaQueryFactory
                 .select(Projections.constructor(CumulativeStatisticsDto.class,
-                        dailyWatchedContent.contentPostId,
-                        count(memberContentWatchLog.id),
-                        numberTemplate(Long.class, "COALESCE(sum({0}), 0)", memberContentWatchLog.totalPlaybackTime),
-                        count(numberTemplate(Long.class, "distinct {0}", memberContentWatchLog.memberId))))
-                .from(dailyWatchedContent)
-                .leftJoin(memberContentWatchLog)
-                .on(dailyWatchedContent.contentPostId.eq(memberContentWatchLog.contentPostId)
-                        .and(memberContentWatchLog.watchedDate.eq(watchedDate)))
+                        memberContentWatchLog.id.min(),
+                        memberContentWatchLog.contentPostId,
+                        memberContentWatchLog.id.count(),
+                        memberContentWatchLog.totalPlaybackTime.sum(),
+                        memberContentWatchLog.watchedDate))
+                .from(memberContentWatchLog)
                 .where(
-                        watchedDateEq(watchedDate),
-                        contentIdGt(lastContentId)
+                        memberContentWatchLog.contentPostId.in(contentIds),
+                        memberContentWatchLog.watchedDate.eq(targetDate)
                 )
-                .groupBy(dailyWatchedContent.contentPostId)
-                .orderBy(dailyWatchedContent.contentPostId.asc())
-                .limit(limit)
+                .groupBy(
+                        memberContentWatchLog.contentPostId,
+                        memberContentWatchLog.watchedDate
+                )
                 .fetch();
     }
 
-    private BooleanExpression contentIdGt(Long contentId) {
-        return contentId != null ? dailyWatchedContent.contentPostId.gt(contentId) : null;
+    public List<Long> findContentIdsByWatchedDate(LocalDate date, Long lastContentId, int limit) {
+        return jpaQueryFactory
+                .select(dailyWatchedContent.contentPostId)
+                .from(dailyWatchedContent)
+                .where(
+                        dailyWatchedContent.watchedDate.eq(date),
+                        lastContentId == null ? null : dailyWatchedContent.contentPostId.gt(lastContentId)
+                )
+                .orderBy(dailyWatchedContent.contentPostId.asc())
+                .limit(limit)
+                .fetch();
     }
 
     private BooleanExpression watchedDateEq(LocalDate date) {

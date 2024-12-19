@@ -27,6 +27,12 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+/**
+ * 정산 처리를 위한 데이터 읽기 구현
+ * - 통계 데이터를 기반으로 정산 데이터 생성
+ * - 백프레셔가 적용된 비동기 큐 사용
+ * - 성능 모니터링을 위한 메트릭 수집
+ */
 @Slf4j
 @Component
 @StepScope
@@ -44,11 +50,20 @@ public class SettlementItemReader implements ItemReader<StatisticsAndCumulativeS
 
     private Long lastStatisticsId = 0L;
 
+    /**
+     * 큐 초기화
+     * - 설정된 용량의 ArrayBlockingQueue 생성
+     */
     @PostConstruct
     public void init() {
         this.statisticsQueue = new ArrayBlockingQueue<>(batchProperties.getReader().getQueueCapacity());
     }
 
+    /**
+     * 데이터 읽기 구현
+     * - 큐가 비어있으면 다음 배치 데이터 로드
+     * - 큐에서 하나의 아이템 반환
+     */
     @Override
     public StatisticsAndCumulativeSettlementDto read() throws Exception {
         if (statisticsQueue.isEmpty()) {
@@ -57,6 +72,13 @@ public class SettlementItemReader implements ItemReader<StatisticsAndCumulativeS
         return statisticsQueue.poll();
     }
 
+    /**
+     * 다음 배치 데이터 로드
+     * - 통계 데이터 조회
+     * - 이전 정산 정보 조회
+     * - DTO 생성 및 큐 적재
+     * - 성능 측정 및 로깅
+     */
     private void fetchNextBatch() {
         Timer.Sample fetchTimer = Timer.start(meterRegistry);
         try {
@@ -71,20 +93,17 @@ public class SettlementItemReader implements ItemReader<StatisticsAndCumulativeS
                 return;
             }
 
-            // 마지막 ID 업데이트
             lastStatisticsId = statistics.get(statistics.size() - 1).getId();
 
-            // 콘텐츠 ID 추출 및 이전 정산 정보 조회
             List<Long> contentIds = extractContentIds(statistics);
             Map<Long, SettlementCalculationDto> prevSettlementMap = fetchPreviousSettlements(contentIds);
 
-            // DTO 생성
             List<StatisticsAndCumulativeSettlementDto> results = createStatisticsAndSettlementDtos(
                     statistics,
                     prevSettlementMap
             );
 
-            // 큐에 데이터 추가 (백프레셔 적용)
+            // 백프레셔가 적용된 큐 적재
             for (StatisticsAndCumulativeSettlementDto result : results) {
                 while (!statisticsQueue.offer(result, 100, TimeUnit.MILLISECONDS)) {
                     log.warn("Queue is full, waiting for space...");
@@ -101,12 +120,19 @@ public class SettlementItemReader implements ItemReader<StatisticsAndCumulativeS
         }
     }
 
+    /**
+     * 통계 데이터에서 콘텐츠 ID 추출
+     */
     private List<Long> extractContentIds(List<ContentStatistics> statistics) {
         return statistics.stream()
                 .map(stat -> stat.getContentPost().getId())
                 .toList();
     }
 
+    /**
+     * 이전 정산 정보 조회
+     * - 콘텐츠 ID 목록에 대한 누적 정산 정보 조회
+     */
     private Map<Long, SettlementCalculationDto> fetchPreviousSettlements(List<Long> contentIds) {
         List<SettlementCalculationDto> prevSettlements =
                 settlementQuerydslRepository.findCumulativeSettlementsByContentIds(contentIds, targetDate);
@@ -119,6 +145,10 @@ public class SettlementItemReader implements ItemReader<StatisticsAndCumulativeS
                 ));
     }
 
+    /**
+     * 정산 DTO 생성
+     * - 통계 데이터와 이전 정산 정보를 결합하여 DTO 생성
+     */
     private List<StatisticsAndCumulativeSettlementDto> createStatisticsAndSettlementDtos(
             List<ContentStatistics> statistics,
             Map<Long, SettlementCalculationDto> prevSettlementMap) {
@@ -128,32 +158,29 @@ public class SettlementItemReader implements ItemReader<StatisticsAndCumulativeS
                 .toList();
     }
 
+    /**
+     * 단일 정산 DTO 생성
+     * - 현재 통계 기반 수익 계산
+     * - 이전 정산 정보와 결합
+     */
     private StatisticsAndCumulativeSettlementDto createStatisticsAndSettlementDto(
             ContentStatistics stat,
             Map<Long, SettlementCalculationDto> prevSettlementMap) {
 
         Long contentId = stat.getContentPost().getId();
 
-        // 현재 통계 기반 수익 계산
         long currentContentRevenue = ContentRevenueRange.calculateRevenueByViews(stat.getAccumulatedViews());
         long currentAdRevenue = AdRevenueRange.calculateRevenueByViews(stat.getWatchTime());
 
-        // 이전 정산 정보 조회 (없으면 초기값)
         SettlementCalculationDto prevSettlement = prevSettlementMap.getOrDefault(
                 contentId,
                 new SettlementCalculationDto(
-                        null,       // id
-                        contentId,
-                        0L,         // totalContentRevenue
-                        0L,         // totalAdRevenue
-                        0L,         // previousContentRevenue
-                        0L          // previousAdRevenue
+                        null, contentId, 0L, 0L, 0L, 0L
                 )
         );
 
-        // 정산 계산 데이터 생성
         SettlementCalculationDto calculationDto = new SettlementCalculationDto(
-                null,                           // id
+                null,
                 contentId,
                 currentContentRevenue,
                 currentAdRevenue,

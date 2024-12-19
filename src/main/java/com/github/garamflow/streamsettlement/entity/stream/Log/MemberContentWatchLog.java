@@ -58,10 +58,10 @@ public class MemberContentWatchLog {
 
     // 새로운 시청 로그 생성용
     @Builder(builderMethodName = "createBuilder")
-    private MemberContentWatchLog(Long memberId, 
-                                Long contentPostId, 
-                                Long lastPlaybackPosition,
-                                StreamingStatus streamingStatus) {
+    private MemberContentWatchLog(Long memberId,
+                                  Long contentPostId,
+                                  Long lastPlaybackPosition,
+                                  StreamingStatus streamingStatus) {
         this.memberId = memberId;
         this.contentPostId = contentPostId;
         this.lastPlaybackPosition = lastPlaybackPosition != null ? lastPlaybackPosition : 0L;
@@ -73,13 +73,13 @@ public class MemberContentWatchLog {
     // 기존 시청 로그 조회용
     @Builder(builderMethodName = "existingBuilder")
     private MemberContentWatchLog(Long id,
-                                Long memberId,
-                                Long contentPostId,
-                                Long lastPlaybackPosition,
-                                Long totalPlaybackTime,
-                                LocalDate watchedDate,
-                                LocalDateTime createdAt,
-                                StreamingStatus streamingStatus) {
+                                  Long memberId,
+                                  Long contentPostId,
+                                  Long lastPlaybackPosition,
+                                  Long totalPlaybackTime,
+                                  LocalDate watchedDate,
+                                  LocalDateTime createdAt,
+                                  StreamingStatus streamingStatus) {
         this.id = id;
         this.memberId = memberId;
         this.contentPostId = contentPostId;

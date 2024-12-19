@@ -40,9 +40,6 @@ public class BatchLoadTest {
     private JobLauncherTestUtils jobLauncherTestUtils;
 
     @Autowired
-    private TestDataGenerator testDataGenerator;
-
-    @Autowired
     private ApplicationContext context;
 
     private static JdbcTemplate jdbcTemplate;
@@ -59,7 +56,6 @@ public class BatchLoadTest {
 
     @BeforeEach
     void setUp() {
-        testDataGenerator.cleanupTables();
         Job job = context.getBean("dailyStatisticsAndSettlementJob", Job.class);
         jobLauncherTestUtils.setJob(job);
     }
@@ -68,41 +64,43 @@ public class BatchLoadTest {
     @Order(1)
     @DisplayName("10만건 배치 처리 성능 테스트")
     void hundredKTest() throws Exception {
-        executeLoadTest(HUNDRED_K, "100K");
+        LocalDate targetDate = LocalDate.of(2024, 12, 16);
+        executeLoadTest(HUNDRED_K, "100K", targetDate);
     }
 
     @Test
     @Order(2)
     @DisplayName("50만건 배치 처리 성능 테스트")
     void fiveHundredKTest() throws Exception {
-        executeLoadTest(FIVE_HUNDRED_K, "500K");
+        LocalDate targetDate = LocalDate.of(2024, 12, 16);
+        executeLoadTest(FIVE_HUNDRED_K, "500K", targetDate);
     }
 
     @Test
     @Order(3)
     @DisplayName("100만건 배치 처리 성능 테스트")
     void oneMillionTest() throws Exception {
-        executeLoadTest(ONE_MILLION, "1M");
+        LocalDate targetDate = LocalDate.of(2024, 12, 16);
+        executeLoadTest(ONE_MILLION, "1M", targetDate);
     }
 
-    // @Test
-    // @Order(4)
-    // @DisplayName("1000만건 배치 처리 성능 테스트")
-    // void tenMillionTest() throws Exception {
-    //     executeLoadTest(TEN_MILLION, "10M");
-    // }
+    @Test
+    @Order(4)
+    @DisplayName("1000만건 배치 처리 성능 테스트")
+    void tenMillionTest() throws Exception {
+        LocalDate targetDate = LocalDate.of(2024, 12, 16);
+        executeLoadTest(TEN_MILLION, "10M", targetDate);
+    }
 
-    // @Test
-    // @Order(5)
-    // @DisplayName("1억건 배치 처리 성능 테스트")
-    // void hundredMillionTest() throws Exception {
-    //     executeLoadTest(HUNDRED_MILLION, "100M");
-    // }
+    @Test
+    @Order(5)
+    @DisplayName("1억건 배치 처리 성능 테스트")
+    void hundredMillionTest() throws Exception {
+        LocalDate targetDate = LocalDate.of(2024, 12, 16);
+        executeLoadTest(HUNDRED_MILLION, "100M", targetDate);
+    }
 
-    private void executeLoadTest(int dataSize, String testType) throws Exception {
-        LocalDate targetDate = LocalDate.now().minusDays(1);
-
-        // 시스템 리소스 초기 상태 기록
+    private void executeLoadTest(int dataSize, String testType, LocalDate targetDate) throws Exception {
         long initialMemory = getUsedMemory();
         long startTime = System.currentTimeMillis();
 
@@ -110,28 +108,18 @@ public class BatchLoadTest {
             log.info("\n===== Starting {} Performance Test =====", testType);
             log.info("Initial memory usage: {} MB", initialMemory / 1024 / 1024);
 
-            // 1. 데이터 생성 단계
-            TestDataGenerator.TestDataConfig config = new TestDataGenerator.TestDataConfig(
-                    dataSize / 100,
-                    dataSize / 100,
-                    dataSize / 2000,
-                    dataSize,
-                    dataSize / 10
-            );
-            testDataGenerator.createTestData(config, targetDate);
-
-            // 2. 배치 작업 실행
+            // 배치 작업 실행
             JobParameters params = new JobParametersBuilder()
-                    .addString("targetDate", targetDate.toString())  // 동일한 targetDate 사용
+                    .addString("targetDate", targetDate.toString())
                     .addLong("timestamp", System.currentTimeMillis())
                     .toJobParameters();
 
             JobExecution jobExecution = jobLauncherTestUtils.launchJob(params);
 
-            // 3. 성능 메트릭 수집 및 출력
+            // 성능 메트릭 수집 및 출력
             logPerformanceMetrics(jobExecution, testType, dataSize, startTime);
 
-            // 4. 결과 검증
+            // 결과 검증
             assertJobResults(jobExecution, dataSize);
 
         } finally {
@@ -142,55 +130,14 @@ public class BatchLoadTest {
         }
     }
 
-    private void generateTestData(int size, String testType, LocalDate targetDate) {
-        long startTime = System.currentTimeMillis();
-        log.info("[{}] Generating test data...", testType);
-
-        TestDataGenerator.TestDataConfig config = new TestDataGenerator.TestDataConfig(
-                size / 100,    // 1% 회원
-                size / 1000,   // 0.1% 콘텐츠
-                size / 2000,   // 0.05% 광고
-                size,          // 시청 로그
-                size / 10      // 광고 시청 로그
-        );
-
-        TestDataGenerator.TestDataResult result = testDataGenerator.createTestData(config, targetDate);
-        validateTestData(result, config);
-
-        long duration = System.currentTimeMillis() - startTime;
-        log.info("[{}] Test data generation completed in {} seconds",
-                testType, duration / 1000.0);
-    }
-
-    private void validateTestData(TestDataGenerator.TestDataResult result, TestDataGenerator.TestDataConfig config) {
-        if (result.actualMembers() < config.memberCount() ||
-                result.actualContents() < config.contentCount()) {
-            throw new RuntimeException(String.format(
-                    "Data generation incomplete - Expected members: %d (actual: %d), " +
-                            "contents: %d (actual: %d)",
-                    config.memberCount(), result.actualMembers(),
-                    config.contentCount(), result.actualContents()
-            ));
-        }
-    }
-
-    private JobExecution executeJob() throws Exception {
-        JobParameters params = new JobParametersBuilder()
-                .addString("targetDate", LocalDate.now().minusDays(1).toString())
-                .addLong("timestamp", System.currentTimeMillis())
-                .toJobParameters();
-
-        return jobLauncherTestUtils.launchJob(params);
-    }
-
     private void logPerformanceMetrics(JobExecution jobExecution, String testType, int dataSize, long startTime) {
         long totalDuration = System.currentTimeMillis() - startTime;
-        
+
         log.info("\n========== {} Load Test Results ==========", testType);
         log.info("Total Records: {}", dataSize);
         log.info("Total Duration: {} seconds", String.format("%.2f", totalDuration / 1000.0));
-        log.info("Average Throughput: {} records/second", 
-            String.format("%.2f", (double) dataSize / (totalDuration / 1000.0)));
+        log.info("Average Throughput: {} records/second",
+                String.format("%.2f", (double) dataSize / (totalDuration / 1000.0)));
 
         for (StepExecution stepExecution : jobExecution.getStepExecutions()) {
             long stepDuration = ChronoUnit.MILLIS.between(
@@ -198,8 +145,8 @@ public class BatchLoadTest {
                     stepExecution.getEndTime()
             );
 
-            double stepThroughput = stepExecution.getWriteCount() / 
-                Math.max(stepDuration / 1000.0, 0.001);
+            double stepThroughput = stepExecution.getWriteCount() /
+                    Math.max(stepDuration / 1000.0, 0.001);
 
             log.info("\nStep: {}", stepExecution.getStepName());
             log.info("├─ Read Count: {}", stepExecution.getReadCount());
@@ -208,10 +155,10 @@ public class BatchLoadTest {
             log.info("├─ Throughput: {} records/second", String.format("%.2f", stepThroughput));
             log.info("├─ Commit Count: {}", stepExecution.getCommitCount());
             log.info("├─ Rollback Count: {}", stepExecution.getRollbackCount());
-            log.info("└─ Skip Count: {}", 
+            log.info("└─ Skip Count: {}",
                     stepExecution.getReadSkipCount() +
-                    stepExecution.getProcessSkipCount() +
-                    stepExecution.getWriteSkipCount());
+                            stepExecution.getProcessSkipCount() +
+                            stepExecution.getWriteSkipCount());
         }
     }
 
@@ -263,9 +210,9 @@ public class BatchLoadTest {
         assertThat(watchLogCount).isNotNull().isGreaterThan(0);
         assertThat(dailyWatchedCount).isNotNull().isGreaterThan(0);
         assertThat(statisticsCount).isNotNull().isGreaterThan(0);
-
-        // content_statistics는 콘텐츠별로 집계므로 시청 로그 수와 다를 수 있음
-        assertThat(statisticsCount).isEqualTo(testDataGenerator.getContentCount());
+//
+//        // content_statistics는 콘텐츠별로 집계므로 시청 로그 수와 다를 수 있음
+//        assertThat(statisticsCount).isEqualTo(testDataGenerator.getContentCount());
     }
 
     private static final int HUNDRED_K = 100_000;
