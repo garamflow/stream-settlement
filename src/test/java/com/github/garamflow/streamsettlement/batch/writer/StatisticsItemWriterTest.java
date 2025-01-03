@@ -40,7 +40,7 @@ class StatisticsItemWriterTest {
         writer.write(chunk);
 
         // then
-        verify(contentStatisticsRepository).bulkInsertStatistics(List.of());
+        verify(contentStatisticsRepository).bulkInsert(List.of());
     }
 
     @Test
@@ -54,7 +54,7 @@ class StatisticsItemWriterTest {
         writer.write(chunk);
 
         // then
-        verify(contentStatisticsRepository).bulkInsertStatistics(List.of(stat));
+        verify(contentStatisticsRepository).bulkInsert(List.of(stat));
     }
 
     @Test
@@ -71,7 +71,7 @@ class StatisticsItemWriterTest {
         writer.write(chunk);
 
         // then
-        verify(contentStatisticsRepository).bulkInsertStatistics(stats);
+        verify(contentStatisticsRepository).bulkInsert(stats);
     }
 
     @Test
@@ -83,7 +83,7 @@ class StatisticsItemWriterTest {
 
         doThrow(new RuntimeException("DB 에러"))
                 .when(contentStatisticsRepository)
-                .bulkInsertStatistics(any());
+                .bulkInsert(any());
 
         // when & then
         assertThatThrownBy(() -> writer.write(chunk))

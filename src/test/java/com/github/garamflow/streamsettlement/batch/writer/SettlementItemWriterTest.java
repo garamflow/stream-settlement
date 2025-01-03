@@ -49,7 +49,7 @@ class SettlementItemWriterTest {
         writer.write(chunk);
 
         // then
-        verify(settlementRepository).bulkInsertSettlement(argThat(savedSettlements -> {
+        verify(settlementRepository).bulkInsert(argThat(savedSettlements -> {
             assertThat(savedSettlements).hasSize(5)
                     .allSatisfy(settlement -> {
                         assertThat(settlement.getContentRevenue()).isEqualTo(1000L);
@@ -72,7 +72,7 @@ class SettlementItemWriterTest {
         writer.write(chunk);
 
         // then
-        verify(settlementRepository).bulkInsertSettlement(argThat(List::isEmpty));
+        verify(settlementRepository).bulkInsert(argThat(List::isEmpty));
     }
 
     private List<Settlement> createTestSettlements(TestSettlementBuilder builder) {
