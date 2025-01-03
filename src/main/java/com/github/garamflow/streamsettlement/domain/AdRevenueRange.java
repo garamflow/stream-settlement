@@ -1,6 +1,6 @@
 package com.github.garamflow.streamsettlement.domain;
 
-public enum AdRevenueRange {
+public enum AdRevenueRange implements BaseRevenueRange, RevenueCalculator {
     TIER_1(0L, 99_999L, 10.0),
     TIER_2(100_000L, 500_000L, 12.0),
     TIER_3(500_001L, 1_000_000L, 15.0),
@@ -16,24 +16,27 @@ public enum AdRevenueRange {
         this.pricePerView = pricePerView;
     }
 
-    public static long calculateRevenueByViews(long totalViews) {
-        long remainingViews = totalViews;
-        long totalRevenue = 0;
+    @Override
+    public long getMinViews() {
+        return minViews;
+    }
 
-        for (AdRevenueRange range : values()) {
-            if (remainingViews <= 0) {
-                break;
-            }
+    @Override
+    public long getMaxViews() {
+        return maxViews;
+    }
 
-            long viewsInRange = Math.min(
-                    remainingViews,
-                    range.maxViews - range.minViews + 1
-            );
+    @Override
+    public double getPricePerView() {
+        return pricePerView;
+    }
 
-            totalRevenue += (long) (viewsInRange * range.pricePerView);
-            remainingViews -= viewsInRange;
-        }
+    @Override
+    public long calculateRevenueByViews(long totalViews) {
+        return calculateTotalRevenue(totalViews);
+    }
 
-        return totalRevenue;
+    public static long calculateTotalRevenue(long totalViews) {
+        return TIER_1.calculateRevenueByViews(values(), totalViews);
     }
 }
