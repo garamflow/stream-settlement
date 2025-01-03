@@ -93,7 +93,7 @@ public class SettlementItemReader implements ItemReader<StatisticsAndCumulativeS
                 return;
             }
 
-            lastStatisticsId = statistics.get(statistics.size() - 1).getId();
+            lastStatisticsId = statistics.getLast().getId();
 
             List<Long> contentIds = extractContentIds(statistics);
             Map<Long, SettlementCalculationDto> prevSettlementMap = fetchPreviousSettlements(contentIds);
@@ -169,8 +169,8 @@ public class SettlementItemReader implements ItemReader<StatisticsAndCumulativeS
 
         Long contentId = stat.getContentPost().getId();
 
-        long currentContentRevenue = ContentRevenueRange.calculateRevenueByViews(stat.getAccumulatedViews());
-        long currentAdRevenue = AdRevenueRange.calculateRevenueByViews(stat.getWatchTime());
+        long currentContentRevenue = ContentRevenueRange.calculateTotalRevenue(stat.getAccumulatedViews());
+        long currentAdRevenue = AdRevenueRange.calculateTotalRevenue(stat.getWatchTime());
 
         SettlementCalculationDto prevSettlement = prevSettlementMap.getOrDefault(
                 contentId,

@@ -29,12 +29,12 @@ public class SettlementItemWriter implements ItemWriter<Settlement> {
     /**
      * 정산 데이터 저장 로직
      * - 청크 단위로 모아진 정산 데이터를 벌크 인서트
-     * 
+     *
      * @param chunk 저장할 정산 데이터 청크
      */
     @Override
     public void write(@NonNull Chunk<? extends Settlement> chunk) {
         List<Settlement> settlements = new ArrayList<>(chunk.getItems());
-        settlementRepository.bulkInsertSettlement(settlements);
+        settlementRepository.bulkInsert(settlements);
     }
 }
