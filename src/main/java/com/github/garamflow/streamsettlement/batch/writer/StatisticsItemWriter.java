@@ -33,6 +33,6 @@ public class StatisticsItemWriter implements ItemWriter<ContentStatistics> {
         List<ContentStatistics> statistics = chunk.getItems().stream()
                 .map(item -> (ContentStatistics) item)
                 .toList();
-        contentStatisticsRepository.bulkInsertStatistics(statistics);
+        contentStatisticsRepository.bulkInsert(statistics);
     }
 }
